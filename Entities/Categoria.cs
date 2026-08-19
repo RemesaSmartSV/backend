@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RemesaSmartSV.Entities;
 
@@ -23,7 +24,9 @@ public class Categoria
     public string? Icono { get; set; }
 
     [ForeignKey("IdHogar")]
+    [JsonIgnore]
     public virtual Hogar Hogar { get; set; } = null!;
 
+    [JsonIgnore]
     public virtual ICollection<Presupuesto> Presupuestos { get; set; } = new List<Presupuesto>();
 }

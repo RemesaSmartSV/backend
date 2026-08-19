@@ -1,6 +1,90 @@
 @RemesaSmartSV_HostAddress = http://localhost:5203
+@token = TU_TOKEN_AQUI
 
-GET {{RemesaSmartSV_HostAddress}}/weatherforecast/
-Accept: application/json
+### Registrar usuario (crea Hogar + Admin)
+POST {{RemesaSmartSV_HostAddress}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "nombre": "Branham",
+  "correo": "branham@correo.com",
+  "contrasena": "Clave12345",
+  "nombreFamiliar": "Familia Branham"
+}
+
+### Iniciar sesión
+POST {{RemesaSmartSV_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "correo": "branham@correo.com",
+  "contrasena": "Clave12345"
+}
+
+### Listar tips financieros (público)
+GET {{RemesaSmartSV_HostAddress}}/api/tipsfinancieros
+
+### Mi hogar (requiere token)
+GET {{RemesaSmartSV_HostAddress}}/api/hogares
+Authorization: Bearer {{token}}
+
+### Miembros del hogar (requiere token)
+GET {{RemesaSmartSV_HostAddress}}/api/usuarios
+Authorization: Bearer {{token}}
+
+### Crear categoría (requiere token)
+POST {{RemesaSmartSV_HostAddress}}/api/categorias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "nombre": "Alimentación",
+  "tipo": "Gasto",
+  "icono": "🍎"
+}
+
+### Crear movimiento (requiere token)
+POST {{RemesaSmartSV_HostAddress}}/api/movimientos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "idCategoria": 1,
+  "monto": 75.50,
+  "fecha": "2026-08-19T10:00:00Z",
+  "tipo": "Gasto",
+  "descripcion": "Mercado semanal",
+  "origenEmisora": "Western Union"
+}
+
+### Crear meta de ahorro (requiere token)
+POST {{RemesaSmartSV_HostAddress}}/api/metasahorro
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "titulo": "Viaje familiar",
+  "montoObjetivo": 500.00,
+  "fechaLimite": "2026-11-19T00:00:00Z"
+}
+
+### Registrar aporte a meta (requiere token)
+POST {{RemesaSmartSV_HostAddress}}/api/aportes
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "idMeta": 1,
+  "monto": 100.00
+}
+
+### Crear presupuesto (requiere token)
+POST {{RemesaSmartSV_HostAddress}}/api/presupuestos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "idCategoria": 1,
+  "montoLimite": 200.00,
+  "mesAnio": "2026-08-01T00:00:00Z"
+}

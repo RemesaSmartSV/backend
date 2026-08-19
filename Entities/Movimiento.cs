@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RemesaSmartSV.Entities;
 
@@ -35,11 +36,14 @@ public class Movimiento
     public string? OrigenEmisora { get; set; }
 
     [ForeignKey("IdHogar")]
+    [JsonIgnore]
     public virtual Hogar Hogar { get; set; } = null!;
 
     [ForeignKey("IdUsuario")]
+    [JsonIgnore]
     public virtual Usuario Usuario { get; set; } = null!;
 
     [ForeignKey("IdCategoria")]
+    [JsonIgnore]
     public virtual Categoria Categoria { get; set; } = null!;
 }

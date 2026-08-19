@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RemesaSmartSV.Entities;
 
@@ -22,6 +23,7 @@ public class Usuario
 
     [Required]
     [StringLength(255)]
+    [JsonIgnore]
     public string ContrasenaHash { get; set; } = null!;
 
     [Required]
@@ -32,5 +34,6 @@ public class Usuario
     public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
 
     [ForeignKey("IdHogar")]
+    [JsonIgnore]
     public virtual Hogar Hogar { get; set; } = null!;
 }

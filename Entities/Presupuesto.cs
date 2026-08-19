@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RemesaSmartSV.Entities;
 
@@ -22,8 +23,10 @@ public class Presupuesto
     public DateTime MesAnio { get; set; }
 
     [ForeignKey("IdHogar")]
+    [JsonIgnore]
     public virtual Hogar Hogar { get; set; } = null!;
 
     [ForeignKey("IdCategoria")]
+    [JsonIgnore]
     public virtual Categoria Categoria { get; set; } = null!;
 }

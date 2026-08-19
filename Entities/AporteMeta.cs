@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace RemesaSmartSV.Entities;
 
@@ -19,5 +20,6 @@ public class AporteMeta
     public DateTime Fecha { get; set; } = DateTime.UtcNow;
 
     [ForeignKey("IdMeta")]
+    [JsonIgnore]
     public virtual MetaAhorro MetaAhorro { get; set; } = null!;
 }
