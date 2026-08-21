@@ -1,0 +1,29 @@
+name: CI Backend RemesaSmart
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar codigo del repositorio
+      uses: actions/checkout@v4
+
+    - name: Configurar entorno .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restaurar dependencias (NuGet)
+      run: dotnet restore RemesaSmartSV.csproj
+
+    - name: Compilar solucion en Release
+      run: dotnet build RemesaSmartSV.csproj --no-restore --configuration Release
+
+    - name: Probar construccion de imagen Docker
+      run: docker build -t remesasmart-backend:test .
