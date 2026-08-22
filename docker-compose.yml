@@ -34,6 +34,20 @@ services:
     networks:
       - remesa_network
 
+  # 3. Frontend React (requiere el repo `frontend` clonado junto a este repo)
+  frontend_web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: remesasmart_frontend
+    restart: on-failure
+    depends_on:
+      - backend_api
+    ports:
+      - "5173:80"
+    networks:
+      - remesa_network
+
 volumes:
   pgdata:
 

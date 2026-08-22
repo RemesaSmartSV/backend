@@ -58,6 +58,31 @@ Migrations/     → Migraciones de EF Core (InitialCreate)
 > *user-secrets* (o variable de entorno `ConnectionStrings__DefaultConnection`).
 > `appsettings.json` solo tiene un placeholder genérico.
 
+## Puesta en marcha con Docker (todo el entorno)
+
+Levanta PostgreSQL + API + Frontend con un solo comando. Requiere tener los repos
+`backend` y `frontend` clonados **en la misma carpeta padre**:
+
+```
+RemesasSmart_SV/
+├── backend/    ← este repo (contiene el docker-compose.yml)
+└── frontend/
+```
+
+```
+docker compose up --build
+```
+
+| Servicio | URL | Descripción |
+|---|---|---|
+| Frontend React | http://localhost:5173 | Interfaz; llama a la API vía proxy de Nginx (`/api`) |
+| API .NET | http://localhost:8080 | Swagger en `http://localhost:8080/swagger` |
+| PostgreSQL | localhost:5432 | DB `RemesaSmartDB` (credenciales de desarrollo en el compose) |
+
+- Las **migraciones se aplican automáticamente** al arrancar la API: no hace falta
+  `dotnet ef database update`.
+- Para detener todo: `docker compose down` (agrega `-v` si quieres borrar también los datos).
+
 ## Endpoints
 
 ### Autenticación (públicos)
@@ -114,5 +139,5 @@ git push origin feature/mi-tarea   # luego abrir PR hacia develop
 
 ## Pendientes (fuera de este repo)
 
-- Frontend React 18 + Vite (repo `frontend/`).
-- Recordatorios programados, Docker + docker-compose, Nginx, GitHub Actions y notificaciones (opcional).
+- Pantallas del MVP 1 en React (hogares, movimientos, tablero) — repo `frontend/`.
+- Recordatorios programados y notificaciones (opcional).
