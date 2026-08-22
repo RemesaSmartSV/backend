@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # 1. Base de datos PostgreSQL
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: remesasmart_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: RemesaSmartDB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: SecretPassword123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - remesa_network
+
+  # 2. Backend .NET 8
+  backend_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: remesasmart_backend
+    restart: on-failure
+    depends_on:
+      - postgres_db
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=SecretPassword123!
+    ports:
+      - "8080:8080"
+    networks:
+      - remesa_network
+
+volumes:
+  pgdata:
+
+networks:
+  remesa_network:
+    driver: bridge
