@@ -29,3 +29,4 @@ public record AddMemberRequest(
 public record UpdateHogarRequest([Required] string NombreFamiliar);
 
 public record UpdateUsuarioRequest(string? Nombre, string? Rol);
+public record ResumenDashboardDTO(decimal TotalIngresos, decimal TotalGastos, decimal Balance);
