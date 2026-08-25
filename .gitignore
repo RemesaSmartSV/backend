@@ -21,6 +21,7 @@ logs/
 ## App settings local / secretos
 appsettings.Local.json
 appsettings.*.local.json
+appsettings.Development.json
 
 ## User secrets (nunca deben subirse)
 secrets.json
