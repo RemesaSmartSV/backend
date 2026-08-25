@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RemesaSmartSV.Data;
+using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
 
@@ -84,5 +85,25 @@ public class MovimientosController : ControllerBase
         _db.Movimientos.Remove(movimiento);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpGet("resumen")]
+    public async Task<ActionResult<ResumenDashboardDTO>> GetResumen([FromQuery] int? anio, [FromQuery] int? mes)
+    {
+        var idHogar = User.GetIdHogar();
+        var query = _db.Movimientos.Where(m => m.IdHogar == idHogar);
+
+        if (anio.HasValue && mes.HasValue)
+            query = query.Where(m => m.Fecha.Year == anio.Value && m.Fecha.Month == mes.Value);
+
+        var totalIngresos = await query
+            .Where(m => m.Tipo == "Ingreso")
+            .SumAsync(m => m.Monto);
+
+        var totalGastos = await query
+            .Where(m => m.Tipo == "Gasto")
+            .SumAsync(m => m.Monto);
+
+        return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalIngresos - totalGastos));
     }
 }
