@@ -25,3 +25,8 @@ appsettings.Development.json
 
 ## User secrets (nunca deben subirse)
 secrets.json
+
+## Variables de entorno locales
+.env
+.env.*
+!.env.example

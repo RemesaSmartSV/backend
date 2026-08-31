@@ -122,6 +122,31 @@ Cuerpo de `register`:
 - **Swagger**: botón *Authorize* para probar con token.
 - **CORS**: habilitado para `http://localhost:5173` (frontend React/Vite).
 
+### Gestión de secretos
+
+Los secretos **nunca** se guardan en archivos versionados. Se utilizan estas fuentes:
+
+| Entorno | Fuente |
+|---|---|
+| Desarrollo local | `.NET User Secrets` (archivos fuera del repositorio) |
+| Docker | Archivo `.env` (ignorado por `.gitignore`) |
+
+Para configurar el entorno local:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "TU_CADENA"
+dotnet user-secrets set "Jwt:Key" "TU_CLAVE_JWT_LARGA"
+```
+
+Para Docker, crear `.env` desde `.env.example`:
+
+```bash
+cp .env.example .env
+# Editar .env con valores reales
+```
+
+> **IMPORTANTE**: `.env` nunca se sube al repositorio. Verificar con `git check-ignore -v .env`.
+
 ## Flujo de trabajo (Git)
 
 - `main` → versión estable (ramas por defecto de GitHub).
