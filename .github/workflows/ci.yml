@@ -25,5 +25,15 @@ jobs:
     - name: Compilar solucion en Release
       run: dotnet build RemesaSmartSV.csproj --no-restore --configuration Release
 
+    - name: Restaurar dependencias de tests
+      if: hashFiles('RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj') != ''
+      run: dotnet restore RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj
+      continue-on-error: true
+
+    - name: Ejecutar pruebas unitarias
+      if: hashFiles('RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj') != ''
+      run: dotnet test RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj --no-restore --configuration Release
+      continue-on-error: true
+
     - name: Probar construccion de imagen Docker
       run: docker build -t remesasmart-backend:test .
