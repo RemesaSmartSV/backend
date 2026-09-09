@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace RemesaSmartSV.DTOs;
 
 public record ReportePeriodoRequestDTO
 {
-    public DateTime FechaInicio { get; set; }
-    public DateTime FechaFin { get; set; }
+    [Required] public DateTime FechaInicio { get; set; }
+    [Required] public DateTime FechaFin { get; set; }
 }
 
 public record ReportePeriodoResponseDTO(
