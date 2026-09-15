@@ -6,6 +6,8 @@ using RemesaSmartSV.Controllers;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
 
+using RemesaSmartSV.DTOs;
+
 namespace RemesaSmartSV.Tests;
 
 public class MetasAhorroControllerTests : IDisposable
@@ -41,8 +43,9 @@ public class MetasAhorroControllerTests : IDisposable
     {
         var result = await _controller.GetMetas();
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var metas = Assert.IsAssignableFrom<IEnumerable<MetaAhorro>>(okResult.Value);
-        Assert.Empty(metas);
+        var response = Assert.IsType<PaginatedResponse<MetaAhorro>>(okResult.Value);
+        Assert.Empty(response.Items);
+        Assert.Equal(0, response.Total);
     }
 
     [Fact]
@@ -54,8 +57,9 @@ public class MetasAhorroControllerTests : IDisposable
 
         var result = await _controller.GetMetas();
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var metas = Assert.IsAssignableFrom<IEnumerable<MetaAhorro>>(okResult.Value);
-        Assert.Single(metas);
+        var response = Assert.IsType<PaginatedResponse<MetaAhorro>>(okResult.Value);
+        Assert.Single(response.Items);
+        Assert.Equal(1, response.Total);
     }
 
     [Fact]

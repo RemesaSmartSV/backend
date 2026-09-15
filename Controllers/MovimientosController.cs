@@ -18,15 +18,40 @@ public class MovimientosController : ControllerBase
     public MovimientosController(ApplicationDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Movimiento>>> GetMovimientos([FromQuery] int? categoriaId, [FromQuery] string? tipo)
+    public async Task<ActionResult<PaginatedResponse<Movimiento>>> GetMovimientos(
+        [FromQuery] int? categoriaId,
+        [FromQuery] string? tipo,
+        [FromQuery] DateTime? fechaInicio,
+        [FromQuery] DateTime? fechaFin,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
         var idHogar = User.GetIdHogar();
         var query = _db.Movimientos.Where(m => m.IdHogar == idHogar);
+
         if (categoriaId.HasValue)
             query = query.Where(m => m.IdCategoria == categoriaId.Value);
         if (!string.IsNullOrWhiteSpace(tipo))
             query = query.Where(m => m.Tipo == tipo);
-        return Ok(await query.OrderByDescending(m => m.Fecha).ToListAsync());
+        if (fechaInicio.HasValue)
+            query = query.Where(m => m.Fecha >= fechaInicio.Value);
+        if (fechaFin.HasValue)
+            query = query.Where(m => m.Fecha <= fechaFin.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(m => m.Fecha)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Ok(new PaginatedResponse<Movimiento>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     [HttpGet("{id}")]
