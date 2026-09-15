@@ -5,6 +5,8 @@ using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
 
+using RemesaSmartSV.DTOs;
+
 namespace RemesaSmartSV.Controllers;
 
 [ApiController]
@@ -17,10 +19,27 @@ public class CategoriasController : ControllerBase
     public CategoriasController(ApplicationDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Categoria>>> GetCategorias()
+    public async Task<ActionResult<PaginatedResponse<Categoria>>> GetCategorias(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
         var idHogar = User.GetIdHogar();
-        return Ok(await _db.Categorias.Where(c => c.IdHogar == idHogar).OrderBy(c => c.Nombre).ToListAsync());
+        var query = _db.Categorias.Where(c => c.IdHogar == idHogar);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderBy(c => c.Nombre)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Ok(new PaginatedResponse<Categoria>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     [HttpGet("{id}")]
