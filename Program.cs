@@ -59,9 +59,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+var allowedOrigins = builder.Configuration["CORS_ORIGINS_PROD"]?
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? new[] { "http://localhost:5173" };
+
 builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()));
 
