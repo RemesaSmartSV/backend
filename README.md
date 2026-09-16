@@ -78,6 +78,7 @@ docker compose up --build
 | Frontend React | http://localhost:5173 | Interfaz; llama a la API vía proxy de Nginx (`/api`) |
 | API .NET | http://localhost:8080 | Swagger en `http://localhost:8080/swagger` |
 | PostgreSQL | localhost:5432 | DB `RemesaSmartDB` (credenciales de desarrollo en el compose) |
+| PostgreSQL (Pruebas) | localhost:5433 | DB `RemesaSmartDB_Test` para pruebas de integración y xUnit |
 
 - Las **migraciones se aplican automáticamente** al arrancar la API: no hace falta
   `dotnet ef database update`.
@@ -112,6 +113,14 @@ Cuerpo de `register`:
 | GET/POST/PUT/DELETE | `/api/metasahorro` | Metas de ahorro (montoActual y estado se gestionan solos) |
 | GET/POST/DELETE | `/api/aportes` | Aportes a metas (`?metaId=`); actualizan el montoActual |
 | GET (público) / POST / PUT / DELETE | `/api/tipsfinancieros` | Contenido de educación financiera; escritura solo Admin |
+
+## Pruebas Unitarias y de Integración
+
+El proyecto cuenta con una suite de pruebas automatizadas con xUnit en la carpeta `RemesaSmartSV.Tests/`.
+
+Para ejecutarlas localmente:
+```bash
+dotnet test --verbosity normal
 
 ## Seguridad
 
