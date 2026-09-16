@@ -1,39 +1,34 @@
-name: CI Backend RemesaSmart
+name: Backend CI
 
 on:
-  push:
-    branches: [ "main", "develop" ]
-  pull_request:
-    branches: [ "main", "develop" ]
+    push:
+        branches: [ develop, main ]
+    pull_request:
+        branches: [ develop, main ]
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
+    build-and-test:
+        name: Build, Test and Docker Check
+        runs-on: ubuntu-latest
 
-    steps:
-    - name: Descargar codigo del repositorio
-      uses: actions/checkout@v4
+        steps:
+            - name: Descargar codigo del repositorio
+              uses: actions/checkout@v4
 
-    - name: Configurar entorno .NET 8
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+            - name: Configurar entorno .NET 8
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: '8.0.x'
 
-    - name: Restaurar dependencias (NuGet)
-      run: dotnet restore RemesaSmartSV.csproj
+            - name: Restaurar dependencias
+              run: dotnet restore
 
-    - name: Compilar solucion en Release
-      run: dotnet build RemesaSmartSV.csproj --no-restore --configuration Release
+            - name: Compilar proyecto
+              run: dotnet build --no-restore --configuration Release
 
-    - name: Restaurar dependencias de tests
-      if: hashFiles('RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj') != ''
-      run: dotnet restore RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj
-      continue-on-error: true
+            - name: Ejecutar pruebas unitarias xUnit
+              run: dotnet test --no-build --configuration Release --verbosity normal
 
-    - name: Ejecutar pruebas unitarias
-      if: hashFiles('RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj') != ''
-      run: dotnet test RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj --no-restore --configuration Release
-      continue-on-error: true
-
-    - name: Probar construccion de imagen Docker
-      run: docker build -t remesasmart-backend:test .
+            - name: Probar construccion de imagen Docker
+              run: docker build -t remesasmart-backend:test .
+              
