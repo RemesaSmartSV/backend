@@ -39,8 +39,8 @@ public class AlertasController : ControllerBase
             return Ok(new List<AlertaResponseDTO>());
         }
 
-        var fechaInicio = request.FechaInicio.Date;
-        var fechaFinExclusiva = request.FechaFin.Date.AddDays(1);
+        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
+        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
 
         // Los movimientos también se consultan por hogar, igual que en MovimientosController.
         var gastosPeriodo = await _context.Movimientos
