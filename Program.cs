@@ -69,6 +69,7 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()));
 
+builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 // Aplicar migraciones pendientes al arrancar (entorno reproducible con Docker)
@@ -89,6 +90,7 @@ app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();
