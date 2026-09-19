@@ -5,6 +5,9 @@ using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
+using System.Globalization;
+using System.Text;
+using System.Text.Json;
 
 namespace RemesaSmartSV.Controllers;
 
@@ -18,15 +21,40 @@ public class MovimientosController : ControllerBase
     public MovimientosController(ApplicationDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Movimiento>>> GetMovimientos([FromQuery] int? categoriaId, [FromQuery] string? tipo)
+    public async Task<ActionResult<PaginatedResponse<Movimiento>>> GetMovimientos(
+        [FromQuery] int? categoriaId,
+        [FromQuery] string? tipo,
+        [FromQuery] DateTime? fechaInicio,
+        [FromQuery] DateTime? fechaFin,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
         var idHogar = User.GetIdHogar();
         var query = _db.Movimientos.Where(m => m.IdHogar == idHogar);
+
         if (categoriaId.HasValue)
             query = query.Where(m => m.IdCategoria == categoriaId.Value);
         if (!string.IsNullOrWhiteSpace(tipo))
             query = query.Where(m => m.Tipo == tipo);
-        return Ok(await query.OrderByDescending(m => m.Fecha).ToListAsync());
+        if (fechaInicio.HasValue)
+            query = query.Where(m => m.Fecha >= fechaInicio.Value);
+        if (fechaFin.HasValue)
+            query = query.Where(m => m.Fecha <= fechaFin.Value);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderByDescending(m => m.Fecha)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Ok(new PaginatedResponse<Movimiento>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     [HttpGet("{id}")]
@@ -34,6 +62,68 @@ public class MovimientosController : ControllerBase
     {
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         return movimiento is null ? NotFound() : Ok(movimiento);
+    }
+
+    [HttpGet("exportar")]
+    public async Task<IActionResult> Exportar([FromQuery] string formato = "csv")
+    {
+        var movimientos = await _db.Movimientos
+            .AsNoTracking()
+            .Include(m => m.Categoria)
+            .Where(m => m.IdHogar == User.GetIdHogar())
+            .OrderByDescending(m => m.Fecha)
+            .Select(m => new
+            {
+                id = m.IdMovimiento,
+                fecha = m.Fecha,
+                tipo = m.Tipo,
+                categoria = m.Categoria.Nombre,
+                monto = m.Monto,
+                descripcion = m.Descripcion,
+                origen = m.OrigenEmisora
+            })
+            .ToListAsync();
+
+        var nombreArchivo = $"movimientos-{DateTime.UtcNow:yyyyMMdd}.";
+
+        if (string.Equals(formato, "json", StringComparison.OrdinalIgnoreCase))
+        {
+            var json = JsonSerializer.Serialize(movimientos, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = true
+            });
+
+            return File(Encoding.UTF8.GetBytes(json), "application/json", nombreArchivo + "json");
+        }
+
+        if (!string.Equals(formato, "csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "El formato debe ser csv o json." });
+
+        var csv = new StringBuilder();
+        csv.AppendLine("Id,Fecha,Tipo,Categoria,Monto,Descripcion,Origen");
+
+        foreach (var movimiento in movimientos)
+        {
+            csv.AppendLine(string.Join(",",
+                movimiento.id,
+                EscaparCsv(movimiento.fecha.ToString("O", CultureInfo.InvariantCulture)),
+                EscaparCsv(movimiento.tipo),
+                EscaparCsv(movimiento.categoria),
+                movimiento.monto.ToString("0.00", CultureInfo.InvariantCulture),
+                EscaparCsv(movimiento.descripcion),
+                EscaparCsv(movimiento.origen)));
+        }
+
+        return File(Encoding.UTF8.GetBytes(csv.ToString()), "text/csv", nombreArchivo + "csv");
+    }
+
+    private static string EscaparCsv(string? valor)
+    {
+        if (string.IsNullOrEmpty(valor))
+            return string.Empty;
+
+        return $"\"{valor.Replace("\"", "\"\"")}\"";
     }
 
     [HttpPost]

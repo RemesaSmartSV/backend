@@ -5,6 +5,8 @@ using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
 
+using RemesaSmartSV.DTOs;
+
 namespace RemesaSmartSV.Controllers;
 
 [ApiController]
@@ -17,10 +19,27 @@ public class MetasAhorroController : ControllerBase
     public MetasAhorroController(ApplicationDbContext db) => _db = db;
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<MetaAhorro>>> GetMetas()
+    public async Task<ActionResult<PaginatedResponse<MetaAhorro>>> GetMetas(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
     {
         var idHogar = User.GetIdHogar();
-        return Ok(await _db.MetasAhorro.Where(m => m.IdHogar == idHogar).OrderBy(m => m.FechaLimite).ToListAsync());
+        var query = _db.MetasAhorro.Where(m => m.IdHogar == idHogar);
+
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderBy(m => m.FechaLimite)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return Ok(new PaginatedResponse<MetaAhorro>
+        {
+            Items = items,
+            Total = total,
+            Page = page,
+            PageSize = pageSize
+        });
     }
 
     [HttpGet("{id}")]
