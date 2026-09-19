@@ -51,9 +51,6 @@ public class AlertasController : ControllerBase
             return Ok(new List<AlertaResponseDTO>());
         }
 
-        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
-        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
-
         // Los movimientos también se consultan por hogar, igual que en MovimientosController.
         var gastosPeriodo = await _context.Movimientos
             .AsNoTracking()
@@ -69,7 +66,7 @@ public class AlertasController : ControllerBase
 
         foreach (var presupuesto in presupuestos)
         {
-            var totalGastado = gastosPorCategoria.GetValueOrDefault(presupuesto.IdCategoria);
+            var totalGastado = gastosPeriodo.GetValueOrDefault(presupuesto.IdCategoria);
 
             if (presupuesto.MontoLimite > 0)
             {
