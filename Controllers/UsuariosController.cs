@@ -33,6 +33,9 @@ public class UsuariosController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Usuario>> AddMember([FromBody] AddMemberRequest request)
     {
+        if (!string.IsNullOrWhiteSpace(request.Rol) && !EsRolValido(request.Rol))
+            return BadRequest(new { message = "El rol debe ser Admin o Miembro." });
+
         var idHogar = User.GetIdHogar();
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == request.Correo.ToLower()))
             return Conflict(new { message = "El correo ya está registrado." });
@@ -56,6 +59,9 @@ public class UsuariosController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUsuarioRequest request)
     {
+        if (!string.IsNullOrWhiteSpace(request.Rol) && !EsRolValido(request.Rol))
+            return BadRequest(new { message = "El rol debe ser Admin o Miembro." });
+
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == User.GetIdHogar());
         if (usuario is null)
             return NotFound();
@@ -66,6 +72,10 @@ public class UsuariosController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static bool EsRolValido(string rol)
+        => string.Equals(rol, "Admin", StringComparison.Ordinal) ||
+           string.Equals(rol, "Miembro", StringComparison.Ordinal);
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]

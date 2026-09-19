@@ -17,6 +17,7 @@ public class Presupuesto
 
     [Required]
     [Column(TypeName = "decimal(10, 2)")]
+    [Range(typeof(decimal), "0.01", "99999999.99")]
     public decimal MontoLimite { get; set; }
 
     [Required]

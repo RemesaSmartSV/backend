@@ -24,14 +24,20 @@ public class AlertasController : ControllerBase
     {
         if (request.FechaInicio > request.FechaFin)
         {
-            return BadRequest("La fecha de inicio no puede ser mayor a la fecha de fin.");
+            return BadRequest(new { message = "La fecha de inicio no puede ser mayor a la fecha de fin." });
         }
 
         var idHogar = User.GetIdHogar();
+        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
+        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
+        var periodoInicio = new DateTime(fechaInicio.Year, fechaInicio.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var periodoFinExclusiva = new DateTime(fechaFinExclusiva.Year, fechaFinExclusiva.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
 
         var presupuestos = await _context.Presupuestos
             .AsNoTracking()
-            .Where(p => p.IdHogar == idHogar)
+            .Where(p => p.IdHogar == idHogar
+                     && p.MesAnio >= periodoInicio
+                     && p.MesAnio < periodoFinExclusiva)
             .Select(p => new
             {
                 p.IdCategoria,
@@ -44,9 +50,6 @@ public class AlertasController : ControllerBase
         {
             return Ok(new List<AlertaResponseDTO>());
         }
-
-        var fechaInicio = request.FechaInicio.Date;
-        var fechaFinExclusiva = request.FechaFin.Date.AddDays(1);
 
         var gastosPorCategoria = await _context.Movimientos
             .AsNoTracking()

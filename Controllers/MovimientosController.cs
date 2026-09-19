@@ -132,6 +132,9 @@ public class MovimientosController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Movimiento>> Create([FromBody] Movimiento movimiento)
     {
+        if (!EsTipoMovimientoValido(movimiento.Tipo))
+            return BadRequest(new { message = "El tipo debe ser Ingreso o Gasto." });
+
         var idHogar = User.GetIdHogar();
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == movimiento.IdCategoria && c.IdHogar == idHogar);
         if (categoria is null)
@@ -148,6 +151,9 @@ public class MovimientosController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Movimiento input)
     {
+        if (!EsTipoMovimientoValido(input.Tipo))
+            return BadRequest(new { message = "El tipo debe ser Ingreso o Gasto." });
+
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         if (movimiento is null)
             return NotFound();
@@ -168,6 +174,10 @@ public class MovimientosController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static bool EsTipoMovimientoValido(string? tipo)
+        => string.Equals(tipo, "Ingreso", StringComparison.Ordinal) ||
+           string.Equals(tipo, "Gasto", StringComparison.Ordinal);
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)

@@ -28,6 +28,8 @@ services:
       - postgres_db
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - UseHttpsRedirection=false
+      - CORS_ORIGINS=http://localhost:5173
       - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=SecretPassword123!
     ports:
       - "8080:8080"

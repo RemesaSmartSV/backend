@@ -68,6 +68,9 @@ public class MetasAhorroController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] MetaAhorro input)
     {
+        if (!string.IsNullOrWhiteSpace(input.Estado) && !EsEstadoValido(input.Estado))
+            return BadRequest(new { message = "El estado debe ser En progreso o Completada." });
+
         var meta = await _db.MetasAhorro.FirstOrDefaultAsync(m => m.IdMeta == id && m.IdHogar == User.GetIdHogar());
         if (meta is null)
             return NotFound();
@@ -79,6 +82,10 @@ public class MetasAhorroController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static bool EsEstadoValido(string estado)
+        => string.Equals(estado, "En progreso", StringComparison.Ordinal) ||
+           string.Equals(estado, "Completada", StringComparison.Ordinal);
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
