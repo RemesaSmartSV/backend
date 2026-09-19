@@ -59,7 +59,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-var allowedOrigins = builder.Configuration["CORS_ORIGINS"]?
+var allowedOrigins = builder.Configuration["CORS_ORIGINS_PROD"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
     ?? new[] { "http://localhost:5173" };
 

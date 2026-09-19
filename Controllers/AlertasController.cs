@@ -51,7 +51,11 @@ public class AlertasController : ControllerBase
             return Ok(new List<AlertaResponseDTO>());
         }
 
-        var gastosPorCategoria = await _context.Movimientos
+        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
+        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
+
+        // Los movimientos también se consultan por hogar, igual que en MovimientosController.
+        var gastosPeriodo = await _context.Movimientos
             .AsNoTracking()
             .Where(m => m.IdHogar == idHogar
                      && m.Tipo == "Gasto"
