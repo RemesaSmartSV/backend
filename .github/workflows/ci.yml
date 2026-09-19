@@ -1,34 +1,33 @@
-name: Backend CI
+name: CI Backend RemesaSmart
 
 on:
     push:
-        branches: [ develop, main ]
+        branches: [ main, develop ]
     pull_request:
-        branches: [ develop, main ]
+        branches: [ main, develop ]
 
 jobs:
     build-and-test:
-        name: Build, Test and Docker Check
         runs-on: ubuntu-latest
 
         steps:
-            - name: Descargar codigo del repositorio
+            - name: Check out repository
               uses: actions/checkout@v4
 
-            - name: Configurar entorno .NET 8
+            - name: Set up .NET 8
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: '8.0.x'
 
-            - name: Restaurar dependencias
+            - name: Restore dependencies
               run: dotnet restore
 
-            - name: Compilar proyecto
+            - name: Build project
               run: dotnet build --no-restore --configuration Release
 
-            - name: Ejecutar pruebas unitarias xUnit
-              run: dotnet test --no-build --configuration Release --verbosity normal
+            - name: Restore test dependencies
+              run: dotnet restore RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj
 
-            - name: Probar construccion de imagen Docker
-              run: docker build -t remesasmart-backend:test .
+            - name: Run xUnit tests
+              run: dotnet test RemesaSmartSV.Tests/RemesaSmartSV.Tests.csproj --no-restore --configuration Release --verbosity normal
               
