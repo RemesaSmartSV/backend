@@ -9,7 +9,7 @@ services:
         environment:
             POSTGRES_DB: RemesaSmartDB
             POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: SecretPassword123!
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecretPassword123!}
         ports:
             - "5432:5432"
         volumes:
@@ -22,7 +22,7 @@ services:
         networks:
             - remesa_network
 
-    # 2. Base de datos PostgreSQL (Pruebas unitarias / integracion)
+    # 2. Base de datos PostgreSQL (Pruebas)
     postgres_test_db:
         image: postgres:16-alpine
         container_name: remesasmart_postgres_test
@@ -30,7 +30,7 @@ services:
         environment:
             POSTGRES_DB: RemesaSmartDB_Test
             POSTGRES_USER: postgres
-            POSTGRES_PASSWORD: SecretPassword123!
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecretPassword123!}
         ports:
             - "5433:5432"
         volumes:
@@ -55,8 +55,8 @@ services:
                 condition: service_healthy
         environment:
             - ASPNETCORE_ENVIRONMENT=Development
-            - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=SecretPassword123!
-            - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=SecretPassword123!
+            - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD:-SecretPassword123!}
+            - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=${POSTGRES_PASSWORD:-SecretPassword123!}
         ports:
             - "8080:8080"
         networks:
