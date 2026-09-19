@@ -24,14 +24,26 @@ public class AlertasController : ControllerBase
     {
         if (request.FechaInicio > request.FechaFin)
         {
-            return BadRequest("La fecha de inicio no puede ser mayor a la fecha de fin.");
+            return BadRequest(new { message = "La fecha de inicio no puede ser mayor a la fecha de fin." });
         }
 
         var idHogar = User.GetIdHogar();
+        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
+        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
+        var periodoInicio = new DateTime(fechaInicio.Year, fechaInicio.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var periodoFinExclusiva = new DateTime(fechaFinExclusiva.Year, fechaFinExclusiva.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(1);
 
         var presupuestos = await _context.Presupuestos
-            .Include(p => p.Categoria)
-            .Where(p => p.IdHogar == idHogar)
+            .AsNoTracking()
+            .Where(p => p.IdHogar == idHogar
+                     && p.MesAnio >= periodoInicio
+                     && p.MesAnio < periodoFinExclusiva)
+            .Select(p => new
+            {
+                p.IdCategoria,
+                p.MontoLimite,
+                CategoriaNombre = p.Categoria.Nombre
+            })
             .ToListAsync();
 
         if (!presupuestos.Any())
@@ -44,19 +56,20 @@ public class AlertasController : ControllerBase
 
         // Los movimientos también se consultan por hogar, igual que en MovimientosController.
         var gastosPeriodo = await _context.Movimientos
+            .AsNoTracking()
             .Where(m => m.IdHogar == idHogar
                      && m.Tipo == "Gasto"
                      && m.Fecha >= fechaInicio
                      && m.Fecha < fechaFinExclusiva)
-            .ToListAsync();
+            .GroupBy(m => m.IdCategoria)
+            .Select(g => new { IdCategoria = g.Key, TotalGastado = g.Sum(m => m.Monto) })
+            .ToDictionaryAsync(g => g.IdCategoria, g => g.TotalGastado);
 
         var alertas = new List<AlertaResponseDTO>();
 
         foreach (var presupuesto in presupuestos)
         {
-            var totalGastado = gastosPeriodo
-                .Where(g => g.IdCategoria == presupuesto.IdCategoria)
-                .Sum(g => g.Monto);
+            var totalGastado = gastosPorCategoria.GetValueOrDefault(presupuesto.IdCategoria);
 
             if (presupuesto.MontoLimite > 0)
             {
@@ -66,7 +79,7 @@ public class AlertasController : ControllerBase
                 {
                     alertas.Add(new AlertaResponseDTO(
                         "Crítico", 
-                        $"Has superado tu límite en {presupuesto.Categoria.Nombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
+                        $"Has superado tu límite en {presupuesto.CategoriaNombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
                         Math.Round(porcentajeUsado, 2)
                     ));
                 }
@@ -74,7 +87,7 @@ public class AlertasController : ControllerBase
                 {
                     alertas.Add(new AlertaResponseDTO(
                         "Advertencia", 
-                        $"Estás a punto de superar tu presupuesto en {presupuesto.Categoria.Nombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
+                        $"Estás a punto de superar tu presupuesto en {presupuesto.CategoriaNombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
                         Math.Round(porcentajeUsado, 2)
                     ));
                 }

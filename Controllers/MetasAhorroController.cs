@@ -23,11 +23,15 @@ public class MetasAhorroController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            return BadRequest(new { message = "page debe ser mayor o igual a 1 y pageSize debe estar entre 1 y 100." });
+
         var idHogar = User.GetIdHogar();
         var query = _db.MetasAhorro.Where(m => m.IdHogar == idHogar);
 
-        var total = await query.CountAsync();
+        var total = await query.AsNoTracking().CountAsync();
         var items = await query
+            .AsNoTracking()
             .OrderBy(m => m.FechaLimite)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -64,6 +68,9 @@ public class MetasAhorroController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] MetaAhorro input)
     {
+        if (!string.IsNullOrWhiteSpace(input.Estado) && !EsEstadoValido(input.Estado))
+            return BadRequest(new { message = "El estado debe ser En progreso o Completada." });
+
         var meta = await _db.MetasAhorro.FirstOrDefaultAsync(m => m.IdMeta == id && m.IdHogar == User.GetIdHogar());
         if (meta is null)
             return NotFound();
@@ -75,6 +82,10 @@ public class MetasAhorroController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static bool EsEstadoValido(string estado)
+        => string.Equals(estado, "En progreso", StringComparison.Ordinal) ||
+           string.Equals(estado, "Completada", StringComparison.Ordinal);
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)

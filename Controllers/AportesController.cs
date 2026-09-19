@@ -23,7 +23,11 @@ public class AportesController : ControllerBase
         var meta = await _db.MetasAhorro.FirstOrDefaultAsync(m => m.IdMeta == metaId && m.IdHogar == idHogar);
         if (meta is null)
             return BadRequest(new { message = "La meta no existe o no pertenece a tu hogar." });
-        return Ok(await _db.Aportes.Where(a => a.IdMeta == metaId).OrderByDescending(a => a.Fecha).ToListAsync());
+        return Ok(await _db.Aportes
+            .AsNoTracking()
+            .Where(a => a.IdMeta == metaId)
+            .OrderByDescending(a => a.Fecha)
+            .ToListAsync());
     }
 
     [HttpPost]
