@@ -30,8 +30,14 @@ public class AlertasController : ControllerBase
         var idHogar = User.GetIdHogar();
 
         var presupuestos = await _context.Presupuestos
-            .Include(p => p.Categoria)
+            .AsNoTracking()
             .Where(p => p.IdHogar == idHogar)
+            .Select(p => new
+            {
+                p.IdCategoria,
+                p.MontoLimite,
+                CategoriaNombre = p.Categoria.Nombre
+            })
             .ToListAsync();
 
         if (!presupuestos.Any())
@@ -42,21 +48,21 @@ public class AlertasController : ControllerBase
         var fechaInicio = request.FechaInicio.Date;
         var fechaFinExclusiva = request.FechaFin.Date.AddDays(1);
 
-        // Los movimientos también se consultan por hogar, igual que en MovimientosController.
-        var gastosPeriodo = await _context.Movimientos
+        var gastosPorCategoria = await _context.Movimientos
+            .AsNoTracking()
             .Where(m => m.IdHogar == idHogar
                      && m.Tipo == "Gasto"
                      && m.Fecha >= fechaInicio
                      && m.Fecha < fechaFinExclusiva)
-            .ToListAsync();
+            .GroupBy(m => m.IdCategoria)
+            .Select(g => new { IdCategoria = g.Key, TotalGastado = g.Sum(m => m.Monto) })
+            .ToDictionaryAsync(g => g.IdCategoria, g => g.TotalGastado);
 
         var alertas = new List<AlertaResponseDTO>();
 
         foreach (var presupuesto in presupuestos)
         {
-            var totalGastado = gastosPeriodo
-                .Where(g => g.IdCategoria == presupuesto.IdCategoria)
-                .Sum(g => g.Monto);
+            var totalGastado = gastosPorCategoria.GetValueOrDefault(presupuesto.IdCategoria);
 
             if (presupuesto.MontoLimite > 0)
             {
@@ -66,7 +72,7 @@ public class AlertasController : ControllerBase
                 {
                     alertas.Add(new AlertaResponseDTO(
                         "Crítico", 
-                        $"Has superado tu límite en {presupuesto.Categoria.Nombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
+                        $"Has superado tu límite en {presupuesto.CategoriaNombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
                         Math.Round(porcentajeUsado, 2)
                     ));
                 }
@@ -74,7 +80,7 @@ public class AlertasController : ControllerBase
                 {
                     alertas.Add(new AlertaResponseDTO(
                         "Advertencia", 
-                        $"Estás a punto de superar tu presupuesto en {presupuesto.Categoria.Nombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
+                        $"Estás a punto de superar tu presupuesto en {presupuesto.CategoriaNombre}. Límite: ${presupuesto.MontoLimite}, Gastado: ${totalGastado}",
                         Math.Round(porcentajeUsado, 2)
                     ));
                 }

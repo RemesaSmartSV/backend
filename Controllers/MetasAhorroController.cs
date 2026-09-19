@@ -23,11 +23,15 @@ public class MetasAhorroController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            return BadRequest(new { message = "page debe ser mayor o igual a 1 y pageSize debe estar entre 1 y 100." });
+
         var idHogar = User.GetIdHogar();
         var query = _db.MetasAhorro.Where(m => m.IdHogar == idHogar);
 
-        var total = await query.CountAsync();
+        var total = await query.AsNoTracking().CountAsync();
         var items = await query
+            .AsNoTracking()
             .OrderBy(m => m.FechaLimite)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

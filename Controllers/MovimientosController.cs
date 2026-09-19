@@ -29,8 +29,11 @@ public class MovimientosController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+            return BadRequest(new { message = "page debe ser mayor o igual a 1 y pageSize debe estar entre 1 y 100." });
+
         var idHogar = User.GetIdHogar();
-        var query = _db.Movimientos.Where(m => m.IdHogar == idHogar);
+        var query = _db.Movimientos.AsNoTracking().Where(m => m.IdHogar == idHogar);
 
         if (categoriaId.HasValue)
             query = query.Where(m => m.IdCategoria == categoriaId.Value);
@@ -67,9 +70,12 @@ public class MovimientosController : ControllerBase
     [HttpGet("exportar")]
     public async Task<IActionResult> Exportar([FromQuery] string formato = "csv")
     {
+        if (!string.Equals(formato, "csv", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(formato, "json", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "El formato debe ser csv o json." });
+
         var movimientos = await _db.Movimientos
             .AsNoTracking()
-            .Include(m => m.Categoria)
             .Where(m => m.IdHogar == User.GetIdHogar())
             .OrderByDescending(m => m.Fecha)
             .Select(m => new
@@ -96,9 +102,6 @@ public class MovimientosController : ControllerBase
 
             return File(Encoding.UTF8.GetBytes(json), "application/json", nombreArchivo + "json");
         }
-
-        if (!string.Equals(formato, "csv", StringComparison.OrdinalIgnoreCase))
-            return BadRequest(new { message = "El formato debe ser csv o json." });
 
         var csv = new StringBuilder();
         csv.AppendLine("Id,Fecha,Tipo,Categoria,Monto,Descripcion,Origen");
@@ -186,13 +189,22 @@ public class MovimientosController : ControllerBase
         if (anio.HasValue && mes.HasValue)
             query = query.Where(m => m.Fecha.Year == anio.Value && m.Fecha.Month == mes.Value);
 
-        var totalIngresos = await query
-            .Where(m => m.Tipo == "Ingreso")
-            .SumAsync(m => m.Monto);
+        var resumen = await query
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(grupo => new
+            {
+                TotalIngresos = grupo
+                    .Where(m => m.Tipo == "Ingreso")
+                    .Sum(m => (decimal?)m.Monto) ?? 0m,
+                TotalGastos = grupo
+                    .Where(m => m.Tipo == "Gasto")
+                    .Sum(m => (decimal?)m.Monto) ?? 0m
+            })
+            .SingleOrDefaultAsync();
 
-        var totalGastos = await query
-            .Where(m => m.Tipo == "Gasto")
-            .SumAsync(m => m.Monto);
+        var totalIngresos = resumen?.TotalIngresos ?? 0m;
+        var totalGastos = resumen?.TotalGastos ?? 0m;
 
         return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalIngresos - totalGastos));
     }

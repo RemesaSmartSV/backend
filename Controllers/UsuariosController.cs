@@ -22,7 +22,11 @@ public class UsuariosController : ControllerBase
     public async Task<ActionResult<IEnumerable<Usuario>>> GetMiembros()
     {
         var idHogar = User.GetIdHogar();
-        return Ok(await _db.Usuarios.Where(u => u.IdHogar == idHogar).OrderBy(u => u.Nombre).ToListAsync());
+        return Ok(await _db.Usuarios
+            .AsNoTracking()
+            .Where(u => u.IdHogar == idHogar)
+            .OrderBy(u => u.Nombre)
+            .ToListAsync());
     }
 
     [HttpPost]
