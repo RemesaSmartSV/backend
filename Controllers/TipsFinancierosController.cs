@@ -17,13 +17,18 @@ public class TipsFinancierosController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<IEnumerable<EducacionFinanciera>>> GetTips()
-        => Ok(await _db.TipsFinancieros.OrderBy(t => t.Titulo).ToListAsync());
+        => Ok(await _db.TipsFinancieros
+            .AsNoTracking()
+            .OrderBy(t => t.Titulo)
+            .ToListAsync());
 
     [HttpGet("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<EducacionFinanciera>> GetTip(int id)
     {
-        var tip = await _db.TipsFinancieros.FindAsync(id);
+        var tip = await _db.TipsFinancieros
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.IdTip == id);
         return tip is null ? NotFound() : Ok(tip);
     }
 
