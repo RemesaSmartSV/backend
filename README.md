@@ -21,7 +21,7 @@ Services/       → Lógica de negocio (AuthService, claims)
 DTOs/           → Modelos de entrada/salida (registro, login, etc.)
 Converters/     → Convertidor de fechas UTC
 Entities/       → Modelos de datos (Hogar, Usuario, Categoria, Movimiento,
-                  Presupuesto, MetaAhorro, AporteMeta, EducacionFinanciera)
+Presupuesto, MetaAhorro, AporteMeta, EducacionFinanciera)
 Data/           → ApplicationDbContext + factory de diseño
 Migrations/     → Migraciones de EF Core (InitialCreate)
 ```
@@ -34,25 +34,25 @@ Migrations/     → Migraciones de EF Core (InitialCreate)
 ## Puesta en marcha (cada desarrollador)
 
 1. **Restaurar paquetes**
-   ```
-   dotnet restore
-   ```
+```
+dotnet restore
+```
 
 2. **Configurar la conexión a tu PostgreSQL** (sin exponer tu contraseña en el repo)
-   ```
-   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=RemesaSmartDb;Username=postgres;Password=TU_CONTRASEÑA"
-   ```
+```
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=RemesaSmartDb;Username=postgres;Password=TU_CONTRASEÑA"
+```
 
 3. **Crear/actualizar la base de datos** (aplica las migraciones)
-   ```
-   dotnet ef database update
-   ```
+```
+dotnet ef database update
+```
 
 4. **Ejecutar**
-   ```
-   dotnet run --launch-profile http
-   ```
-   La API queda en `http://localhost:5203` y Swagger en `http://localhost:5203/swagger`.
+```
+dotnet run --launch-profile http
+```
+La API queda en `http://localhost:5203` y Swagger en `http://localhost:5203/swagger`.
 
 > La contraseña de PostgreSQL **nunca** se sube al repositorio: la conexión real va por
 > *user-secrets* (o variable de entorno `ConnectionStrings__DefaultConnection`).
@@ -78,9 +78,10 @@ docker compose up --build
 | Frontend React | http://localhost:5173 | Interfaz; llama a la API vía proxy de Nginx (`/api`) |
 | API .NET | http://localhost:8080 | Swagger en `http://localhost:8080/swagger` |
 | PostgreSQL | localhost:5432 | DB `RemesaSmartDB` (credenciales de desarrollo en el compose) |
+| PostgreSQL (Pruebas) | localhost:5433 | DB `RemesaSmartDB_Test` para pruebas de integración y xUnit |
 
 - Las **migraciones se aplican automáticamente** al arrancar la API: no hace falta
-  `dotnet ef database update`.
+`dotnet ef database update`.
 - Para detener todo: `docker compose down` (agrega `-v` si quieres borrar también los datos).
 
 ## Endpoints
@@ -94,10 +95,10 @@ docker compose up --build
 Cuerpo de `register`:
 ```json
 {
-  "nombre": "Branham",
-  "correo": "branham@correo.com",
-  "contrasena": "Clave12345",
-  "nombreFamiliar": "Familia Branham"
+"nombre": "Branham",
+"correo": "branham@correo.com",
+"contrasena": "Clave12345",
+"nombreFamiliar": "Familia Branham"
 }
 ```
 
@@ -112,6 +113,15 @@ Cuerpo de `register`:
 | GET/POST/PUT/DELETE | `/api/metasahorro` | Metas de ahorro (montoActual y estado se gestionan solos) |
 | GET/POST/DELETE | `/api/aportes` | Aportes a metas (`?metaId=`); actualizan el montoActual |
 | GET (público) / POST / PUT / DELETE | `/api/tipsfinancieros` | Contenido de educación financiera; escritura solo Admin |
+
+## Pruebas Unitarias y de Integración
+
+El proyecto cuenta con una suite de pruebas automatizadas con xUnit en la carpeta `RemesaSmartSV.Tests/`.
+
+Para ejecutarlas localmente:
+```bash
+dotnet test --verbosity normal
+```
 
 ## Seguridad
 
