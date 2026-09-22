@@ -18,10 +18,12 @@ public class MetaAhorro
 
     [Required]
     [Column(TypeName = "decimal(10, 2)")]
+    [Range(typeof(decimal), "0.01", "99999999.99")]
     public decimal MontoObjetivo { get; set; }
 
     [Required]
     [Column(TypeName = "decimal(10, 2)")]
+    [Range(typeof(decimal), "0", "99999999.99")]
     public decimal MontoActual { get; set; } = 0;
 
     [Required]

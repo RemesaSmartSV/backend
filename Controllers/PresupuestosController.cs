@@ -23,7 +23,10 @@ public class PresupuestosController : ControllerBase
         var query = _db.Presupuestos.Where(p => p.IdHogar == idHogar);
         if (anio.HasValue && mes.HasValue)
             query = query.Where(p => p.MesAnio.Year == anio.Value && p.MesAnio.Month == mes.Value);
-        return Ok(await query.OrderByDescending(p => p.MesAnio).ToListAsync());
+        return Ok(await query
+            .AsNoTracking()
+            .OrderByDescending(p => p.MesAnio)
+            .ToListAsync());
     }
 
     [HttpGet("{id}")]
