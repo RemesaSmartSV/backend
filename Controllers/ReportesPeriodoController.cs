@@ -23,8 +23,8 @@ public class ReportesPeriodoController : ControllerBase
         if (request.FechaInicio > request.FechaFin)
             return BadRequest(new { message = "La fecha de inicio no puede ser mayor a la fecha de fin." });
 
-        var fechaInicio = request.FechaInicio.Date;
-        var fechaFinExclusiva = request.FechaFin.Date.AddDays(1);
+        var fechaInicio = DateTime.SpecifyKind(request.FechaInicio.Date, DateTimeKind.Utc);
+        var fechaFinExclusiva = DateTime.SpecifyKind(request.FechaFin.Date.AddDays(1), DateTimeKind.Utc);
         var idHogar = User.GetIdHogar();
 
         var resumen = await _db.Movimientos
