@@ -18,6 +18,9 @@ public class UsuariosController : ControllerBase
 
     public UsuariosController(ApplicationDbContext db) => _db = db;
 
+    /// <summary>Obtiene los miembros del hogar del usuario actual.</summary>
+    /// <response code="200">Devuelve la lista de miembros del hogar.</response>
+    [ProducesResponseType(typeof(IEnumerable<Usuario>), StatusCodes.Status200OK)]
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Usuario>>> GetMiembros()
     {
@@ -29,6 +32,15 @@ public class UsuariosController : ControllerBase
             .ToListAsync());
     }
 
+    /// <summary>Agrega un miembro al hogar actual.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Ana Rivera", "correo": "ana.rivera@example.com", "contrasena": "ClaveSegura123", "rol": "Miembro"}</c></remarks>
+    /// <param name="request">Datos del miembro que se agregará.</param>
+    /// <response code="201">El miembro fue agregado.</response>
+    /// <response code="400">El rol indicado no es válido.</response>
+    /// <response code="409">El correo ya está registrado.</response>
+    [ProducesResponseType(typeof(Usuario), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Usuario>> AddMember([FromBody] AddMemberRequest request)
@@ -55,6 +67,16 @@ public class UsuariosController : ControllerBase
         return CreatedAtAction(nameof(GetMiembros), new { id = usuario.IdUsuario }, usuario);
     }
 
+    /// <summary>Actualiza el nombre o el rol de un miembro del hogar.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Ana Rivera", "rol": "Admin"}</c></remarks>
+    /// <param name="id">Identificador del miembro.</param>
+    /// <param name="request">Valores que se actualizarán para el miembro.</param>
+    /// <response code="204">El miembro fue actualizado.</response>
+    /// <response code="400">El rol indicado no es válido.</response>
+    /// <response code="404">El miembro no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUsuarioRequest request)
@@ -77,6 +99,14 @@ public class UsuariosController : ControllerBase
         => string.Equals(rol, "Admin", StringComparison.Ordinal) ||
            string.Equals(rol, "Miembro", StringComparison.Ordinal);
 
+    /// <summary>Elimina un miembro del hogar actual.</summary>
+    /// <param name="id">Identificador del miembro.</param>
+    /// <response code="204">El miembro fue eliminado.</response>
+    /// <response code="400">El usuario actual no puede eliminarse a sí mismo.</response>
+    /// <response code="404">El miembro no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
