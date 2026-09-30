@@ -10,7 +10,9 @@ Esta guía describe los pasos necesarios para levantar el entorno de desarrollo 
 ## Puesta en Marcha (Docker Compose)
 1. Clonar el repositorio: `git clone https://github.com/RemesaSmartSV/backend.git`
 2. Configurar el `.env` en la raíz de la carpeta `backend/` con la variable `POSTGRES_PASSWORD=TuPasswordSeguro123!`.
-3. Levantar los servicios: `docker compose up -d --build`
+3. Levantar los servicios:
+   - **Stack completo** (requiere clonar `frontend` como hermano de `backend/`): `docker compose --profile frontend up -d --build`
+   - **Solo backend** (funciona en un clon limpio sin frontend): `docker compose up -d --build`
 
 ## Puertos Clave
 - **API Swagger:** `http://localhost:8080/swagger`

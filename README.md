@@ -70,7 +70,7 @@ RemesasSmart_SV/
 ```
 
 ```
-docker compose up --build
+docker compose --profile frontend up --build
 ```
 
 | Servicio | URL | Descripción |
@@ -82,7 +82,21 @@ docker compose up --build
 
 - Las **migraciones se aplican automáticamente** al arrancar la API: no hace falta
 `dotnet ef database update`.
-- Para detener todo: `docker compose down` (agrega `-v` si quieres borrar también los datos).
+- Para detener todo: `docker compose --profile frontend down` (agrega `-v` si quieres
+borrar también los datos). Sin el perfil solo se apaga el stack base.
+
+### Solo backend (clon limpio, sin el frontend)
+
+El servicio `frontend_web` está detrás del perfil `frontend` a propósito: un clon
+que solo tiene `backend/` no tiene el repositorio hermano y `../frontend` no
+existe, por lo que el build fallaría. Sin el perfil, el stack base sí levanta:
+
+```
+docker compose up --build
+```
+
+Con eso obtienes PostgreSQL + API, útil para desarrollar el backend o correr las
+pruebas de integración sin descargar el frontend. Para detenerlo: `docker compose down`.
 
 ## Endpoints
 

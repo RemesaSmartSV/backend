@@ -68,7 +68,12 @@ services:
       - remesa_network
 
   # 4. Frontend React
+  # Detras del perfil "frontend" a proposito: un clon limpio de SOLO backend
+  # no tiene el repo hermano y "docker compose up --build" fallaria al construir
+  # el contexto ../frontend. Con perfil, el stack base levanta solo y la demo
+  # completa se pide explicitamente (issue Organizacion #82 / DEMO-01).
   frontend_web:
+    profiles: ["frontend"]
     build:
       context: ../frontend
       dockerfile: Dockerfile
