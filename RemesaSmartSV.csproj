@@ -9,17 +9,29 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
+  <!--
+    Excluir TODO el proyecto de pruebas de los globs por defecto, no solo el codigo.
+    Si solo se excluye Compile, los archivos de RemesaSmartSV.Tests\bin\** entran como
+    Content/None, se copian de forma transitiva a la salida del proyecto de pruebas y se
+    anidan un nivel por compilacion hasta superar MAX_PATH (MSB3030).
+  -->
   <ItemGroup>
     <Compile Remove="RemesaSmartSV.Tests/**" />
+    <Content Remove="RemesaSmartSV.Tests/**" />
+    <None Remove="RemesaSmartSV.Tests/**" />
+    <EmbeddedResource Remove="RemesaSmartSV.Tests/**" />
+    <_ContentIncludedByDefault Remove="RemesaSmartSV.Tests/**" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.30" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30">
+    <!-- Alineadas con Npgsql.EntityFrameworkCore.PostgreSQL 8.0.11 para evitar el
+         conflicto MSB3277 entre Microsoft.EntityFrameworkCore.Relational 8.0.11 y 8.0.30. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.30">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

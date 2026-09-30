@@ -11,10 +11,19 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.30" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <!-- Alineada con Microsoft.EntityFrameworkCore.* 8.0.11 del proyecto principal
+         para evitar el conflicto MSB3277 entre Relational 8.0.11 y 8.0.30. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.11" />
+    <!-- 17.11.1 elimina el grafo NETStandard.Library 1.6.x que arrastraba
+         System.Net.Http 4.3.0 y System.Text.RegularExpressions 4.3.0
+         (GHSA-7jgj-8wvc-jh57 y GHSA-cmhx-cq75-c4mj, ambas High). -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <!-- Fijan por encima de la versión transitiva 4.3.0 que arrastra el grafo
+         netstandard1.1 de xunit (GHSA-7jgj-8wvc-jh57 y GHSA-cmhx-cq75-c4mj). -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
 
   <ItemGroup>
