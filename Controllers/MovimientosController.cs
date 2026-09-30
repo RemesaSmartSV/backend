@@ -20,6 +20,17 @@ public class MovimientosController : ControllerBase
 
     public MovimientosController(ApplicationDbContext db) => _db = db;
 
+    /// <summary>Obtiene los movimientos del hogar con filtros opcionales y paginación.</summary>
+    /// <param name="categoriaId">Filtra por identificador de categoría cuando se especifica.</param>
+    /// <param name="tipo">Filtra por tipo de movimiento cuando se especifica.</param>
+    /// <param name="fechaInicio">Filtra los movimientos desde esta fecha inclusive.</param>
+    /// <param name="fechaFin">Filtra los movimientos hasta esta fecha inclusive.</param>
+    /// <param name="page">Número de página que se consultará.</param>
+    /// <param name="pageSize">Cantidad de movimientos por página, entre 1 y 100.</param>
+    /// <response code="200">Devuelve la página de movimientos que coincide con los filtros.</response>
+    /// <response code="400">Los valores de paginación están fuera de los límites permitidos.</response>
+    [ProducesResponseType(typeof(PaginatedResponse<Movimiento>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<Movimiento>>> GetMovimientos(
         [FromQuery] int? categoriaId,
@@ -60,6 +71,12 @@ public class MovimientosController : ControllerBase
         });
     }
 
+    /// <summary>Obtiene un movimiento del hogar por su identificador.</summary>
+    /// <param name="id">Identificador del movimiento.</param>
+    /// <response code="200">Devuelve el movimiento encontrado.</response>
+    /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(typeof(Movimiento), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpGet("{id}")]
     public async Task<ActionResult<Movimiento>> GetMovimiento(int id)
     {
@@ -67,6 +84,12 @@ public class MovimientosController : ControllerBase
         return movimiento is null ? NotFound() : Ok(movimiento);
     }
 
+    /// <summary>Exporta los movimientos del hogar como archivo CSV o JSON.</summary>
+    /// <param name="formato">Formato de exportación: csv o json.</param>
+    /// <response code="200">Devuelve el archivo de movimientos en el formato solicitado.</response>
+    /// <response code="400">El formato no es csv ni json.</response>
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet("exportar")]
     public async Task<IActionResult> Exportar([FromQuery] string formato = "csv")
     {
@@ -129,6 +152,13 @@ public class MovimientosController : ControllerBase
         return $"\"{valor.Replace("\"", "\"\"")}\"";
     }
 
+    /// <summary>Crea un movimiento para el hogar actual.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"idCategoria": 2, "monto": 18.75, "fecha": "2026-09-28T12:00:00Z", "tipo": "Gasto", "descripcion": "Compra de alimentos", "origenEmisora": "Transferencia"}</c></remarks>
+    /// <param name="movimiento">Datos del movimiento que se creará.</param>
+    /// <response code="201">El movimiento fue creado.</response>
+    /// <response code="400">El tipo no es válido o la categoría no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(typeof(Movimiento), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost]
     public async Task<ActionResult<Movimiento>> Create([FromBody] Movimiento movimiento)
     {
@@ -148,6 +178,16 @@ public class MovimientosController : ControllerBase
         return CreatedAtAction(nameof(GetMovimiento), new { id = movimiento.IdMovimiento }, movimiento);
     }
 
+    /// <summary>Actualiza un movimiento del hogar.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"idCategoria": 2, "monto": 18.75, "fecha": "2026-09-28T12:00:00Z", "tipo": "Gasto", "descripcion": "Compra de alimentos", "origenEmisora": "Transferencia"}</c></remarks>
+    /// <param name="id">Identificador del movimiento.</param>
+    /// <param name="input">Nuevos datos del movimiento.</param>
+    /// <response code="204">El movimiento fue actualizado.</response>
+    /// <response code="400">El tipo no es válido o la categoría no existe o no pertenece al hogar.</response>
+    /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Movimiento input)
     {
@@ -179,6 +219,12 @@ public class MovimientosController : ControllerBase
         => string.Equals(tipo, "Ingreso", StringComparison.Ordinal) ||
            string.Equals(tipo, "Gasto", StringComparison.Ordinal);
 
+    /// <summary>Elimina un movimiento del hogar.</summary>
+    /// <param name="id">Identificador del movimiento.</param>
+    /// <response code="204">El movimiento fue eliminado.</response>
+    /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -190,6 +236,11 @@ public class MovimientosController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Obtiene el resumen de ingresos, gastos y balance del hogar.</summary>
+    /// <param name="anio">Año por el que se filtrará el resumen, si se especifica junto con el mes.</param>
+    /// <param name="mes">Mes por el que se filtrará el resumen, si se especifica junto con el año.</param>
+    /// <response code="200">Devuelve los totales de ingresos, gastos y balance.</response>
+    [ProducesResponseType(typeof(ResumenDashboardDTO), StatusCodes.Status200OK)]
     [HttpGet("resumen")]
     public async Task<ActionResult<ResumenDashboardDTO>> GetResumen([FromQuery] int? anio, [FromQuery] int? mes)
     {

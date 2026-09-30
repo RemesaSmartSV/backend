@@ -18,6 +18,13 @@ public class CategoriasController : ControllerBase
 
     public CategoriasController(ApplicationDbContext db) => _db = db;
 
+    /// <summary>Obtiene las categorías del hogar en páginas.</summary>
+    /// <param name="page">Número de página que se consultará.</param>
+    /// <param name="pageSize">Cantidad de categorías por página, entre 1 y 100.</param>
+    /// <response code="200">Devuelve la página solicitada de categorías.</response>
+    /// <response code="400">Los valores de paginación están fuera de los límites permitidos.</response>
+    [ProducesResponseType(typeof(PaginatedResponse<Categoria>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<Categoria>>> GetCategorias(
         [FromQuery] int page = 1,
@@ -46,6 +53,12 @@ public class CategoriasController : ControllerBase
         });
     }
 
+    /// <summary>Obtiene una categoría del hogar por su identificador.</summary>
+    /// <param name="id">Identificador de la categoría.</param>
+    /// <response code="200">Devuelve la categoría encontrada.</response>
+    /// <response code="404">La categoría no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(typeof(Categoria), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpGet("{id}")]
     public async Task<ActionResult<Categoria>> GetCategoria(int id)
     {
@@ -53,6 +66,11 @@ public class CategoriasController : ControllerBase
         return categoria is null ? NotFound() : Ok(categoria);
     }
 
+    /// <summary>Crea una categoría para el hogar actual.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Alimentación", "tipo": "Gasto", "icono": "shopping-cart"}</c></remarks>
+    /// <param name="categoria">Datos de la categoría que se creará.</param>
+    /// <response code="201">La categoría fue creada.</response>
+    [ProducesResponseType(typeof(Categoria), StatusCodes.Status201Created)]
     [HttpPost]
     public async Task<ActionResult<Categoria>> Create([FromBody] Categoria categoria)
     {
@@ -63,6 +81,14 @@ public class CategoriasController : ControllerBase
         return CreatedAtAction(nameof(GetCategoria), new { id = categoria.IdCategoria }, categoria);
     }
 
+    /// <summary>Actualiza los datos de una categoría del hogar.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Alimentación", "tipo": "Gasto", "icono": "shopping-cart"}</c></remarks>
+    /// <param name="id">Identificador de la categoría.</param>
+    /// <param name="input">Nuevos datos de la categoría.</param>
+    /// <response code="204">La categoría fue actualizada.</response>
+    /// <response code="404">La categoría no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Categoria input)
     {
@@ -76,6 +102,12 @@ public class CategoriasController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Elimina una categoría del hogar.</summary>
+    /// <param name="id">Identificador de la categoría.</param>
+    /// <response code="204">La categoría fue eliminada.</response>
+    /// <response code="404">La categoría no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
