@@ -18,6 +18,13 @@ public class MetasAhorroController : ControllerBase
 
     public MetasAhorroController(ApplicationDbContext db) => _db = db;
 
+    /// <summary>Obtiene las metas de ahorro del hogar en páginas.</summary>
+    /// <param name="page">Número de página que se consultará.</param>
+    /// <param name="pageSize">Cantidad de metas por página, entre 1 y 100.</param>
+    /// <response code="200">Devuelve la página solicitada de metas.</response>
+    /// <response code="400">Los valores de paginación están fuera de los límites permitidos.</response>
+    [ProducesResponseType(typeof(PaginatedResponse<MetaAhorro>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet]
     public async Task<ActionResult<PaginatedResponse<MetaAhorro>>> GetMetas(
         [FromQuery] int page = 1,
@@ -46,6 +53,12 @@ public class MetasAhorroController : ControllerBase
         });
     }
 
+    /// <summary>Obtiene una meta de ahorro del hogar por su identificador.</summary>
+    /// <param name="id">Identificador de la meta de ahorro.</param>
+    /// <response code="200">Devuelve la meta encontrada.</response>
+    /// <response code="404">La meta no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(typeof(MetaAhorro), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpGet("{id}")]
     public async Task<ActionResult<MetaAhorro>> GetMeta(int id)
     {
@@ -53,6 +66,11 @@ public class MetasAhorroController : ControllerBase
         return meta is null ? NotFound() : Ok(meta);
     }
 
+    /// <summary>Crea una meta de ahorro para el hogar actual.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"titulo": "Fondo de emergencia", "montoObjetivo": 1000.00, "montoActual": 0, "fechaLimite": "2027-06-30T00:00:00Z", "estado": "En progreso"}</c></remarks>
+    /// <param name="meta">Datos de la meta de ahorro que se creará.</param>
+    /// <response code="201">La meta de ahorro fue creada.</response>
+    [ProducesResponseType(typeof(MetaAhorro), StatusCodes.Status201Created)]
     [HttpPost]
     public async Task<ActionResult<MetaAhorro>> Create([FromBody] MetaAhorro meta)
     {
@@ -65,6 +83,16 @@ public class MetasAhorroController : ControllerBase
         return CreatedAtAction(nameof(GetMeta), new { id = meta.IdMeta }, meta);
     }
 
+    /// <summary>Actualiza una meta de ahorro del hogar.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"titulo": "Fondo de emergencia", "montoObjetivo": 1000.00, "montoActual": 0, "fechaLimite": "2027-06-30T00:00:00Z", "estado": "En progreso"}</c></remarks>
+    /// <param name="id">Identificador de la meta de ahorro.</param>
+    /// <param name="input">Nuevos datos de la meta.</param>
+    /// <response code="204">La meta de ahorro fue actualizada.</response>
+    /// <response code="400">El estado indicado no es válido.</response>
+    /// <response code="404">La meta no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] MetaAhorro input)
     {
@@ -87,6 +115,12 @@ public class MetasAhorroController : ControllerBase
         => string.Equals(estado, "En progreso", StringComparison.Ordinal) ||
            string.Equals(estado, "Completada", StringComparison.Ordinal);
 
+    /// <summary>Elimina una meta de ahorro del hogar.</summary>
+    /// <param name="id">Identificador de la meta de ahorro.</param>
+    /// <response code="204">La meta de ahorro fue eliminada.</response>
+    /// <response code="404">La meta no existe o no pertenece al hogar.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {

@@ -23,5 +23,13 @@ appsettings.Local.json
 appsettings.*.local.json
 appsettings.Development.json
 
+## Variables de entorno reales (nunca deben subirse; ver .env.example)
+.env
+.env.*
+!.env.example
+
 ## User secrets (nunca deben subirse)
 secrets.json
+
+## Database backups
+scripts/backup_*.sql

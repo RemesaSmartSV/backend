@@ -1,8 +1,11 @@
 bin/
 obj/
 .git/
+.github/
 .vs/
 .vscode/
+RemesaSmartSV.Tests/
 Dockerfile
 docker-compose*.yml
 .env
+.env.*

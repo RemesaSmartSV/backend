@@ -28,6 +28,7 @@ public class Movimiento
 
     [Required]
     [StringLength(20)]
+    [AllowedValues("Ingreso", "Gasto")]
     public string Tipo { get; set; } = null!;
 
     [StringLength(255)]
