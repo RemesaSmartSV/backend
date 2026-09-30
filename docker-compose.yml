@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: RemesaSmartDB
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecretPassword123!}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -28,7 +28,7 @@ services:
     environment:
       POSTGRES_DB: RemesaSmartDB_Test
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SecretPassword123!}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
@@ -53,9 +53,9 @@ services:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HttpRedirection=false
-      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD:-SecretPassword123!}
-      - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=${POSTGRES_PASSWORD:-SecretPassword123!}
+      - UseHttpsRedirection=false
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=${POSTGRES_PASSWORD}
     ports:
       - "8080:8080"
     networks:
@@ -82,4 +82,3 @@ volumes:
 networks:
   remesa_network:
     driver: bridge
-    
