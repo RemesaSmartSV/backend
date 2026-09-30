@@ -25,3 +25,6 @@ appsettings.Development.json
 
 ## User secrets (nunca deben subirse)
 secrets.json
+
+## Database backups
+scripts/backup_*.sql
