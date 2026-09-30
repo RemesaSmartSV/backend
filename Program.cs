@@ -6,8 +6,14 @@ using Microsoft.OpenApi.Models;
 using RemesaSmartSV.Converters;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Services;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .WriteTo.Console());
 
 builder.Services.AddControllers(options =>
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
@@ -73,6 +79,8 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddHealthChecks();
 var app = builder.Build();
+
+app.UseSerilogRequestLogging();
 
 // Aplicar migraciones pendientes al arrancar (entorno reproducible con Docker)
 using (var scope = app.Services.CreateScope())
