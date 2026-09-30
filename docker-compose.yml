@@ -52,10 +52,16 @@ services:
       postgres_db:
         condition: service_healthy
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - UseHttpsRedirection=false
       - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
       - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=${POSTGRES_PASSWORD}
+      # La clave JWT nunca vive en el repositorio: viene de .env (no trackeado).
+      - Jwt__Key=${JWT_KEY:?JWT_KEY es obligatorio. Copia .env.example a .env y completa JWT_KEY}
+      - Jwt__Issuer=RemesaSmartSV
+      - Jwt__Audience=RemesaSmartSVClient
+      # Nombre de variable esperado por Program.cs (CORS_ORIGINS_PROD).
+      - CORS_ORIGINS_PROD=${CORS_ORIGINS_PROD:-http://localhost:5173}
     ports:
       - "8080:8080"
     networks:
