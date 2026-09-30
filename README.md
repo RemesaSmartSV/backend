@@ -151,3 +151,7 @@ git push origin feature/mi-tarea   # luego abrir PR hacia develop
 
 - Pantallas del MVP 1 en React (hogares, movimientos, tablero) — repo `frontend/`.
 - Recordatorios programados y notificaciones (opcional).
+
+## Monitoreo y Logs
+- **Health Check:** `http://localhost:8080/health` (Verificación de estado de la API).
+- **Ver logs en Docker:** `docker logs -f remesasmart_backend`
