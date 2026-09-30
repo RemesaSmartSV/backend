@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  # 1. Base de datos PostgreSQL
+  # 1. Base de datos PostgreSQL (Desarrollo)
   postgres_db:
     image: postgres:16-alpine
     container_name: remesasmart_postgres
@@ -9,15 +7,41 @@ services:
     environment:
       POSTGRES_DB: RemesaSmartDB
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: SecretPassword123!
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - remesa_network
 
-  # 2. Backend .NET 8
+  # 2. Base de datos PostgreSQL (Pruebas unitarias / Integracion)
+  postgres_test_db:
+    image: postgres:16-alpine
+    container_name: remesasmart_postgres_test
+    restart: always
+    environment:
+      POSTGRES_DB: RemesaSmartDB_Test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - remesa_network
+
+  # 3. Backend .NET 8
   backend_api:
     build:
       context: .
@@ -25,18 +49,19 @@ services:
     container_name: remesasmart_backend
     restart: on-failure
     depends_on:
-      - postgres_db
+      postgres_db:
+        condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - UseHttpsRedirection=false
-      - CORS_ORIGINS=http://localhost:5173
-      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=SecretPassword123!
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - ConnectionStrings__TestConnection=Host=postgres_test_db;Port=5432;Database=RemesaSmartDB_Test;Username=postgres;Password=${POSTGRES_PASSWORD}
     ports:
       - "8080:8080"
     networks:
       - remesa_network
 
-  # 3. Frontend React (requiere el repo `frontend` clonado junto a este repo)
+  # 4. Frontend React
   frontend_web:
     build:
       context: ../frontend
@@ -52,6 +77,7 @@ services:
 
 volumes:
   pgdata:
+  pgdata_test:
 
 networks:
   remesa_network:
