@@ -27,4 +27,4 @@ appsettings.Development.json
 secrets.json
 
 ## Database backups
-scripts/*.sql
+scripts/backup_*.sql
