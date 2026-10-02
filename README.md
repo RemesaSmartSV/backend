@@ -6,24 +6,29 @@ API de finanzas familiares para El Salvador (gestión de remesas). ASP.NET Core 
 
 | Tecnología | Versión |
 |---|---|
-| C# / .NET | 8.0 (SDK 8.0.x) |
+| C# / .NET | 8.0 (`net8.0`, SDK 8.0.x) |
 | ASP.NET Core Web API | 8.0 |
-| Entity Framework Core | 8.0.30 |
+| Entity Framework Core | 8.0.11 (`Design`, `Tools`, `InMemory`) |
 | Npgsql (PostgreSQL) | 8.0.11 |
+| JWT Bearer | 8.0.30 |
+| Serilog | 10.0.0 |
 | Swagger (Swashbuckle) | 6.9.0 |
+| xUnit | 2.5.3 |
 | PostgreSQL | 16 |
 
 ## Estructura del proyecto
 
 ```
-Controllers/    → Endpoints de la API (Auth + 8 entidades)
-Services/       → Lógica de negocio (AuthService, claims)
-DTOs/           → Modelos de entrada/salida (registro, login, etc.)
-Converters/     → Convertidor de fechas UTC
-Entities/       → Modelos de datos (Hogar, Usuario, Categoria, Movimiento,
-Presupuesto, MetaAhorro, AporteMeta, EducacionFinanciera)
-Data/           → ApplicationDbContext + factory de diseño
-Migrations/     → Migraciones de EF Core (InitialCreate)
+Controllers/           → Endpoints de la API (Auth + 8 entidades)
+Services/              → Lógica de negocio (AuthService, claims)
+DTOs/                  → Modelos de entrada/salida (registro, login, etc.)
+Converters/            → Convertidor de fechas UTC
+Entities/              → Modelos de datos (Hogar, Usuario, Categoria, Movimiento,
+                         Presupuesto, MetaAhorro, AporteMeta, EducacionFinanciera)
+Data/                  → ApplicationDbContext + factory de diseño
+Migrations/            → Migraciones de EF Core (InitialCreate)
+scripts/               → backup_db.sh, restore-db.sh, datos_prueba_demo.sql
+RemesaSmartSV.Tests/   → Suite xUnit (unitarias + integración)
 ```
 
 ## Requisitos
@@ -128,6 +133,20 @@ Cuerpo de `register`:
 | GET/POST/DELETE | `/api/aportes` | Aportes a metas (`?metaId=`); actualizan el montoActual |
 | GET (público) / POST / PUT / DELETE | `/api/tipsfinancieros` | Contenido de educación financiera; escritura solo Admin |
 
+### Consultas y exportación
+
+22 rutas / 41 operaciones. Swagger: `GET /swagger/v1/swagger.json`.
+
+| Método | Ruta | Notas |
+|---|---|---|
+| GET | `/api/movimientos/resumen?anio=&mes=` | `totalIngresos`, `totalGastos` y `balance` del hogar |
+| GET | `/api/movimientos/exportar?formato=csv\|json` | Descarga de movimientos (`400` si el formato no existe) |
+| GET | `/api/alertas/periodo?FechaInicio=&FechaFin=` | Alertas del período (ambos obligatorios) |
+| GET | `/api/reportesperiodo?FechaInicio=&FechaFin=` | Reportes del período (ambos obligatorios) |
+
+> `FechaInicio` y `FechaFin` van como fecha completa con zona (`2026-09-01T00:00:00Z`).
+> Enviarlos solo como `YYYY-MM-DD` en `/api/movimientos` devuelve `500`: ver issue **#86**.
+
 ## Pruebas Unitarias y de Integración
 
 El proyecto cuenta con una suite de pruebas automatizadas con xUnit en la carpeta `RemesaSmartSV.Tests/`.
@@ -139,12 +158,29 @@ dotnet test --verbosity normal
 
 ## Seguridad
 
-- **JWT Bearer**: token con validez de 8 horas. Claims: `idUsuario`, `idHogar`, rol, email.
+- **JWT Bearer**: token con validez de 8 horas (`ClockSkew = 0`). Claims: `idUsuario`, `idHogar`, rol, email.
 - **Contraseñas**: con hash (PBKDF2 vía `PasswordHasher`); el hash **nunca** se expone en las respuestas.
 - **Roles**: `Admin` y `Miembro`. Operaciones sensibles (borrar hogar, gestionar usuarios/tips) solo `Admin`.
 - **Aislamiento por hogar**: cada usuario solo accede a datos de su propio hogar (el `IdHogar` se toma del token, no del cuerpo).
-- **Swagger**: botón *Authorize* para probar con token.
-- **CORS**: habilitado para `http://localhost:5173` (frontend React/Vite).
+- **Rate limiting**: política `auth` — ventana fija de **10 peticiones por minuto**, cola 0, respuesta `429`. No es global a propósito: el panel dispara varias peticiones por pantalla.
+- **Manejo de errores**: `UseExceptionHandler` en producción; los `500` no filtran stack trace.
+- **Swagger**: botón *Authorize* para probar con token. Expuesto en el stack Docker (ver issue **SEC-08**).
+- **CORS**: origen configurable por `CORS_ORIGINS_PROD` (alias `CORS_ORIGINS`), por defecto `http://localhost:5173`.
+
+### Gestión de secretos
+
+| Entorno | Fuente |
+|---|---|
+| Desarrollo local | `.NET User Secrets` (archivos fuera del repositorio) |
+| Docker | Archivo `.env` (ignorado por `.gitignore`) |
+
+```bash
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "TU_CADENA"
+dotnet user-secrets set "Jwt:Key" "TU_CLAVE_JWT_LARGA"
+cp .env.example .env   # para Docker; editar .env con valores reales
+```
+
+> **IMPORTANTE**: `.env` nunca se sube al repositorio. Verificar con `git check-ignore -v .env`.
 
 ## Flujo de trabajo (Git)
 
@@ -161,7 +197,19 @@ git checkout -b feature/mi-tarea
 git push origin feature/mi-tarea   # luego abrir PR hacia develop
 ```
 
-## Pendientes (fuera de este repo)
+## Pendientes
 
-- Pantallas del MVP 1 en React (hogares, movimientos, tablero) — repo `frontend/`.
-- Recordatorios programados y notificaciones (opcional).
+Bugs abiertos:
+
+- **#86** — `GET /api/movimientos?fechaInicio=YYYY-MM-DD` → `500` (`DateTimeKind.Unspecified` vs `timestamp with time zone`).
+- **#87** — `GET /api/aportes` sin `metaId` → `400`, pero Swagger lo declara opcional.
+
+Demo (etiquetas `DEMO-*`):
+
+- **#83** — tips de educación financiera sin sembrar en la migración (`GET /api/tipsfinancieros` → `[]`).
+- **#84** — sin alerta de presupuesto excedido en el momento clave de la demo.
+
+Fuera de este repo:
+
+- Frontend: SPA React con 57 pruebas automatizadas — ver `../frontend/` y `../Organizacion/doc/`.
+- Recordatorios programados y notificaciones (HU-09), opcional.
