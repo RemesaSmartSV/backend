@@ -18,11 +18,13 @@ public class Categoria
 
     [Required]
     [StringLength(20)]
-    [AllowedValues("Ingreso", "Gasto")]
+    [AllowedValues("Ingreso", "Gasto", "Ahorro")]
     public string Tipo { get; set; } = null!;
 
     [StringLength(50)]
     public string? Icono { get; set; }
+
+    public bool EsSistema { get; set; }
 
     [ForeignKey("IdHogar")]
     [JsonIgnore]

@@ -12,9 +12,18 @@ public class MetaAhorro
     [Required]
     public int IdHogar { get; set; }
 
+    /// <summary>Usuario que creó la meta. Nullable para metas heredadas o del sistema.</summary>
+    public int? IdUsuario { get; set; }
+
     [Required]
     [StringLength(100)]
     public string Titulo { get; set; } = null!;
+
+    [StringLength(255)]
+    public string? Descripcion { get; set; }
+
+    [Required]
+    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
     [Required]
     [Column(TypeName = "decimal(10, 2)")]
@@ -36,6 +45,10 @@ public class MetaAhorro
     [ForeignKey("IdHogar")]
     [JsonIgnore]
     public virtual Hogar Hogar { get; set; } = null!;
+
+    [ForeignKey("IdUsuario")]
+    [JsonIgnore]
+    public virtual Usuario? Usuario { get; set; }
 
     [JsonIgnore]
     public virtual ICollection<AporteMeta> Aportes { get; set; } = new List<AporteMeta>();

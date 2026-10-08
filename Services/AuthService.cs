@@ -59,13 +59,17 @@ public class AuthService
         return BuildLoginResponse(usuario);
     }
 
+    // IdHogar/Rol son opcionales desde la FASE 2 (registro sin familia).
+    // El centinela 0/"" mantiene el contrato del DTO sin romper a los usuarios
+    // actuales (todos tienen hogar). La FASE 4 reemplaza esto por el flujo real
+    // de "hogar pendiente".
     private LoginResponse BuildLoginResponse(Usuario usuario) => new(
-        Token: GenerateToken(usuario),
-        IdUsuario: usuario.IdUsuario,
-        Nombre: usuario.Nombre,
-        Correo: usuario.Correo,
-        Rol: usuario.Rol,
-        IdHogar: usuario.IdHogar);
+    Token: GenerateToken(usuario),
+    IdUsuario: usuario.IdUsuario,
+    Nombre: usuario.Nombre,
+    Correo: usuario.Correo,
+    Rol: usuario.Rol ?? string.Empty,
+    IdHogar: usuario.IdHogar ?? 0);
 
     private string GenerateToken(Usuario usuario)
     {
@@ -73,8 +77,8 @@ public class AuthService
         var claims = new[]
         {
             new Claim("idUsuario", usuario.IdUsuario.ToString()),
-            new Claim("idHogar", usuario.IdHogar.ToString()),
-            new Claim(ClaimTypes.Role, usuario.Rol),
+            new Claim("idHogar", (usuario.IdHogar ?? 0).ToString()),
+            new Claim(ClaimTypes.Role, usuario.Rol ?? string.Empty),
             new Claim(JwtRegisteredClaimNames.Email, usuario.Correo)
         };
 

@@ -17,6 +17,47 @@ public class ApplicationDbContext : DbContext
     public DbSet<MetaAhorro> MetasAhorro { get; set; }
     public DbSet<AporteMeta> Aportes { get; set; }
     public DbSet<EducacionFinanciera> TipsFinancieros { get; set; }
+    public DbSet<InvitacionFamilia> InvitacionesFamilia { get; set; }
+    public DbSet<Notificacion> Notificaciones { get; set; }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Usuario.IdHogar es opcional (registro sin familia, sección 12/13 del prompt).
+        // Se fija CASCADE explícito para NO cambiar el comportamiento previo
+        // (EF por convención pondría ClientSetNull al volverse opcional la relación).
+        modelBuilder.Entity<Usuario>()
+            .HasOne(u => u.Hogar)
+            .WithMany(h => h.Usuarios)
+            .HasForeignKey(u => u.IdHogar)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AporteMeta>()
+            .HasOne(a => a.Usuario)
+            .WithMany()
+            .HasForeignKey(a => a.IdUsuario)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<MetaAhorro>()
+            .HasOne(m => m.Usuario)
+            .WithMany()
+            .HasForeignKey(m => m.IdUsuario)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<InvitacionFamilia>()
+            .HasOne(i => i.Invitado)
+            .WithMany()
+            .HasForeignKey(i => i.IdInvitado)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<InvitacionFamilia>()
+            .HasIndex(i => new { i.IdHogar, i.Correo })
+            .IsUnique();
+
+        modelBuilder.Entity<Notificacion>()
+            .HasIndex(n => new { n.IdUsuario, n.Leida });
+    }
 }
 
 // Fábrica en tiempo de diseño para que la CLI de EF Core se conecte directamente
