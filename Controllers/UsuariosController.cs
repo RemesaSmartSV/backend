@@ -67,6 +67,28 @@ public class UsuariosController : ControllerBase
         return CreatedAtAction(nameof(GetMiembros), new { id = usuario.IdUsuario }, usuario);
     }
 
+    /// <summary>Actualiza solo el nombre del usuario autenticado (auto-servicio).</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Ana Rivera"}</c></remarks>
+    /// <param name="request">Nuevo nombre del usuario.</param>
+    /// <response code="204">El perfil fue actualizado.</response>
+    /// <response code="404">El usuario autenticado no existe.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpPut("perfil")]
+    public async Task<IActionResult> ActualizarPerfil([FromBody] ActualizarPerfilRequest request)
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        // Solo Nombre: Rol e IdHogar no se tocan acá. Cambiarlos exige pasar por sus
+        // endpoints con permisos (PUT {id} para Admin, alta de hogar), así este
+        // endpoint de auto-servicio no puede escalar privilegios.
+        usuario.Nombre = request.Nombre;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Actualiza el nombre o el rol de un miembro del hogar.</summary>
     /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Ana Rivera", "rol": "Admin"}</c></remarks>
     /// <param name="id">Identificador del miembro.</param>

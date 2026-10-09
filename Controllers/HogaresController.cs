@@ -14,8 +14,49 @@ namespace RemesaSmartSV.Controllers;
 public class HogaresController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly AuthService _authService;
 
-    public HogaresController(ApplicationDbContext db) => _db = db;
+    public HogaresController(ApplicationDbContext db, AuthService authService)
+    {
+        _db = db;
+        _authService = authService;
+    }
+
+    /// <summary>Crea el hogar del usuario actual y lo asigna como Admin.</summary>
+    /// <remarks>Ejemplo de cuerpo: <c>{"nombreFamiliar": "Familia Rivera"}</c></remarks>
+    /// <param name="request">Nombre familiar del hogar que se creará.</param>
+    /// <response code="200">Hogar creado. Devuelve la sesión refrescada con el hogar y el rol.</response>
+    /// <response code="404">El usuario autenticado no existe.</response>
+    /// <response code="409">El usuario ya pertenece a un hogar.</response>
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [HttpPost]
+    public async Task<ActionResult<LoginResponse>> Create([FromBody] CrearHogarRequest request)
+    {
+        // GetIdHogar() devuelve 0 cuando el token no trae hogar asignado.
+        if (User.GetIdHogar() != 0)
+            return Conflict(new { message = "Ya pertenecés a un hogar." });
+
+        var usuario = await _db.Usuarios.FindAsync(User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        var hogar = new Hogar { NombreFamiliar = request.NombreFamiliar };
+        _db.Hogares.Add(hogar);
+        await _db.SaveChangesAsync();
+
+        // Cambio 7: todo hogar nace con las categorías del sistema.
+        await CategoriasSistema.SeedAsync(_db, hogar.IdHogar);
+
+        usuario.IdHogar = hogar.IdHogar;
+        usuario.Rol = "Admin";
+        await _db.SaveChangesAsync();
+
+        // Se devuelve un LoginResponse refrescado: el token del request trae idHogar=0,
+        // así que hace falta emitir un token nuevo que incluya el hogar y el rol.
+        return Ok(_authService.BuildLoginResponse(usuario));
+    }
 
     /// <summary>Obtiene el hogar asociado al usuario actual.</summary>
     /// <response code="200">Devuelve el hogar del usuario.</response>

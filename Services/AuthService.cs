@@ -26,19 +26,12 @@ public class AuthService
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == request.Correo.ToLower()))
             return null;
 
-        var hogar = new Hogar { NombreFamiliar = request.NombreFamiliar };
-        _db.Hogares.Add(hogar);
-        await _db.SaveChangesAsync();
-
-        // Cambio 7: todo hogar nace con las categorias del sistema.
-        await CategoriasSistema.SeedAsync(_db, hogar.IdHogar);
-
+        // El registro ya no crea el hogar: el usuario queda sin IdHogar y sin Rol
+        // hasta que crea un hogar (POST api/hogares) o se une a uno existente.
         var usuario = new Usuario
         {
-            IdHogar = hogar.IdHogar,
             Nombre = request.Nombre,
             Correo = request.Correo,
-            Rol = "Admin",
             FechaRegistro = DateTime.UtcNow
         };
         usuario.ContrasenaHash = new PasswordHasher<Usuario>().HashPassword(usuario, request.Contrasena);
@@ -62,20 +55,24 @@ public class AuthService
         return BuildLoginResponse(usuario);
     }
 
-    // IdHogar/Rol son opcionales desde la FASE 2 (registro sin familia).
-    // El centinela 0/"" mantiene el contrato del DTO sin romper a los usuarios
-    // actuales (todos tienen hogar). La FASE 4 reemplaza esto por el flujo real
-    // de "hogar pendiente".
-    private LoginResponse BuildLoginResponse(Usuario usuario) => new(
-    Token: GenerateToken(usuario),
-    IdUsuario: usuario.IdUsuario,
-    Nombre: usuario.Nombre,
-    Correo: usuario.Correo,
-    Rol: usuario.Rol ?? string.Empty,
-    IdHogar: usuario.IdHogar ?? 0);
+    // IdHogar y Rol pueden ser null: el usuario registrado aún no tiene hogar.
+    // La respuesta refleja esa ausencia con null (sin centinelas 0/""), y se completa
+    // cuando el usuario crea un hogar (POST api/hogares) o se une a uno existente.
+    // Es public porque HogaresController necesita emitir un token refrescado tras
+    // crear el hogar: el token del request todavía llega con el claim idHogar=0.
+    public LoginResponse BuildLoginResponse(Usuario usuario) => new(
+        Token: GenerateToken(usuario),
+        IdUsuario: usuario.IdUsuario,
+        Nombre: usuario.Nombre,
+        Correo: usuario.Correo,
+        Rol: usuario.Rol,
+        IdHogar: usuario.IdHogar);
 
     private string GenerateToken(Usuario usuario)
     {
+        // Dentro del token sí se usan centinelas: un Claim no admite valor null y
+        // GetIdHogar() interpreta la ausencia como 0. El contrato público (LoginResponse)
+        // maneja la ausencia de hogar con null; el claim del token sigue usando 0.
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
         var claims = new[]
         {
