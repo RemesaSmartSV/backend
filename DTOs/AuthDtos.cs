@@ -38,3 +38,7 @@ public record UpdateHogarRequest([Required] string NombreFamiliar);
 
 public record UpdateUsuarioRequest(string? Nombre, string? Rol);
 public record ResumenDashboardDTO(decimal TotalIngresos, decimal TotalGastos, decimal Balance);
+// Cuerpo de POST api/Invitaciones: correo del destinatario a invitar.
+public record InvitarRequest(
+    [Required, EmailAddress] string Correo);
+
