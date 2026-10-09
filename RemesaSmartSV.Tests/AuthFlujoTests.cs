@@ -132,8 +132,8 @@ public class AuthFlujoTests : IDisposable
         Assert.Equal("Admin", usuarioActualizado.Rol);
         Assert.Equal(respuesta.IdHogar, usuarioActualizado.IdHogar);
 
-        // Cambio 7: el hogar nace con las 10 categorias del sistema.
-        Assert.Equal(10, await _db.Categorias.CountAsync(c => c.EsSistema && c.IdHogar == hogar.IdHogar));
+        // Cambio 7 ampliado (M4): el hogar nace con las 16 categorías del sistema.
+        Assert.Equal(16, await _db.Categorias.CountAsync(c => c.EsSistema && c.IdHogar == hogar.IdHogar));
     }
 
     [Fact]

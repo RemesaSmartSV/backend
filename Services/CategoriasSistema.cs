@@ -17,6 +17,9 @@ public static class CategoriasSistema
     {
         ("Remesas", "Ingreso", "\uD83C\uDF10"),
         ("Salario", "Ingreso", "\uD83D\uDCBC"),
+        ("Negocio", "Ingreso", "\uD83C\uDFE2"),
+        ("Freelance", "Ingreso", "\uD83D\uDCBB"),
+        ("Inversión", "Ingreso", "\uD83D\uDCC8"),
         ("Otros ingresos", "Ingreso", "\uD83D\uDCB0"),
         ("Alimentación", "Gasto", "\uD83D\uDED2"),
         ("Vivienda", "Gasto", "\uD83C\uDFE0"),
@@ -24,7 +27,10 @@ public static class CategoriasSistema
         ("Salud", "Gasto", "\uD83C\uDFE5"),
         ("Transporte", "Gasto", "\uD83D\uDE8C"),
         ("Educación", "Gasto", "\uD83D\uDCDA"),
-        ("Ocio", "Gasto", "\uD83C\uDFAE")
+        ("Ocio", "Gasto", "\uD83C\uDFAE"),
+        ("Compras", "Gasto", "\uD83D\uDECD"),
+        ("Deudas", "Gasto", "\uD83D\uDCB3"),
+        ("Otros gastos", "Gasto", "\uD83E\uDDFE")
     };
 
     /// <summary>
