@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
+using RemesaSmartSV.Services;
 
 namespace RemesaSmartSV.Controllers;
 
@@ -42,18 +43,19 @@ public class TipsFinancierosController : ControllerBase
     }
 
     /// <summary>Crea un consejo financiero.</summary>
-    /// <remarks>Ejemplo de cuerpo: <c>{"idCategoria": 2, "titulo": "Ahorro mensual", "contenido": "Define una cantidad mensual y sepárala al recibir tus ingresos."}</c></remarks>
+    /// <remarks>El campo <c>idCategoria</c> es opcional: los tips son contenido global y las
+    /// categorías son por hogar. Si se informa, debe existir y pertenecer al hogar del usuario.
+    /// Ejemplo de cuerpo: <c>{"titulo": "Ahorro mensual", "contenido": "Define una cantidad mensual y sepárala al recibir tus ingresos."}</c></remarks>
     /// <param name="tip">Datos del consejo financiero que se creará.</param>
     /// <response code="201">El consejo financiero fue creado.</response>
-    /// <response code="400">La categoría no existe.</response>
+    /// <response code="400">La categoría no existe o no pertenece al hogar del usuario.</response>
     [ProducesResponseType(typeof(EducacionFinanciera), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<EducacionFinanciera>> Create([FromBody] EducacionFinanciera tip)
     {
-        var categoria = await _db.Categorias.FindAsync(tip.IdCategoria);
-        if (categoria is null)
+        if (tip.IdCategoria.HasValue && !await CategoriaDelHogarExiste(tip.IdCategoria.Value))
             return BadRequest(new { message = "La categoría no existe." });
 
         tip.IdTip = 0;
@@ -63,12 +65,15 @@ public class TipsFinancierosController : ControllerBase
     }
 
     /// <summary>Actualiza un consejo financiero.</summary>
-    /// <remarks>Ejemplo de cuerpo: <c>{"idCategoria": 2, "titulo": "Ahorro mensual", "contenido": "Define una cantidad mensual y sepárala al recibir tus ingresos."}</c></remarks>
+    /// <remarks><c>idCategoria</c> es opcional; si cambia, la categoría nueva debe existir y
+    /// pertenecer al hogar del usuario. Ejemplo de cuerpo: <c>{"titulo": "Ahorro mensual", "contenido": "Define una cantidad mensual y sepárala al recibir tus ingresos."}</c></remarks>
     /// <param name="id">Identificador del consejo financiero.</param>
     /// <param name="input">Nuevos datos del consejo.</param>
     /// <response code="204">El consejo financiero fue actualizado.</response>
+    /// <response code="400">La categoría no existe o no pertenece al hogar del usuario.</response>
     /// <response code="404">El consejo no existe.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     [Authorize(Roles = "Admin")]
@@ -77,7 +82,14 @@ public class TipsFinancierosController : ControllerBase
         var tip = await _db.TipsFinancieros.FindAsync(id);
         if (tip is null)
             return NotFound();
-        tip.IdCategoria = input.IdCategoria;
+
+        if (input.IdCategoria != tip.IdCategoria)
+        {
+            if (input.IdCategoria.HasValue && !await CategoriaDelHogarExiste(input.IdCategoria.Value))
+                return BadRequest(new { message = "La categoría no existe." });
+            tip.IdCategoria = input.IdCategoria;
+        }
+
         tip.Titulo = input.Titulo;
         tip.Contenido = input.Contenido;
         await _db.SaveChangesAsync();
@@ -101,4 +113,8 @@ public class TipsFinancierosController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>True si la categoría existe y es del hogar del usuario autenticado.</summary>
+    private Task<bool> CategoriaDelHogarExiste(int idCategoria)
+        => _db.Categorias.AnyAsync(c => c.IdCategoria == idCategoria && c.IdHogar == User.GetIdHogar());
 }

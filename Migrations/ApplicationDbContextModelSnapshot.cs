@@ -107,7 +107,7 @@ namespace RemesaSmartSV.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("IdCategoria")
+                    b.Property<int?>("IdCategoria")
                         .HasColumnType("integer");
 
                     b.Property<string>("Titulo")
@@ -431,8 +431,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Categoria", "Categoria")
                         .WithMany()
                         .HasForeignKey("IdCategoria")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Categoria");
                 });

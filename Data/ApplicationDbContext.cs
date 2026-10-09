@@ -45,6 +45,15 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(m => m.IdUsuario)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Los tips son globales; al desvincularse de la categoría no deben borrarse con ella.
+        // Antes la relación era obligatoria y CASCADE, así que esto cambia el comportamiento
+        // a propósito como parte de la decisión de modelo de TipsFinancieros.
+        modelBuilder.Entity<EducacionFinanciera>()
+            .HasOne(t => t.Categoria)
+            .WithMany()
+            .HasForeignKey(t => t.IdCategoria)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<InvitacionFamilia>()
             .HasOne(i => i.Invitado)
             .WithMany()
