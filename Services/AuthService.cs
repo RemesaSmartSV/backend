@@ -30,6 +30,9 @@ public class AuthService
         _db.Hogares.Add(hogar);
         await _db.SaveChangesAsync();
 
+        // Cambio 7: todo hogar nace con las categorias del sistema.
+        await CategoriasSistema.SeedAsync(_db, hogar.IdHogar);
+
         var usuario = new Usuario
         {
             IdHogar = hogar.IdHogar,
