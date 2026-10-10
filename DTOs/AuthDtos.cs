@@ -43,7 +43,29 @@ public record AddMemberRequest(
 
 public record CrearHogarRequest([Required, StringLength(100)] string NombreFamiliar);
 
-public record ActualizarPerfilRequest([Required, StringLength(100)] string Nombre);
+public class ActualizarPerfilRequest
+{
+    [Required, StringLength(100)]
+    public string Nombre { get; set; } = null!;
+
+    [StringLength(100)]
+    public string? Apellido { get; set; }
+
+    [StringLength(100)]
+    public string? NombreVisible { get; set; }
+
+    [StringLength(500)]
+    public string? FotoPerfil { get; set; }
+
+    [StringLength(20)]
+    public string? Telefono { get; set; }
+
+    [StringLength(10)]
+    public string? IdiomaPreferido { get; set; }
+
+    [StringLength(20)]
+    public string? TemaPreferido { get; set; }
+}
 
 public record UpdateHogarRequest([Required] string NombreFamiliar);
 

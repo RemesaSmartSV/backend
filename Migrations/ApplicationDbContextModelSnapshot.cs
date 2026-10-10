@@ -357,6 +357,10 @@ namespace RemesaSmartSV.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdUsuario"));
 
+                    b.Property<string>("Apellido")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ContrasenaHash")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -370,15 +374,35 @@ namespace RemesaSmartSV.Migrations
                     b.Property<DateTime>("FechaRegistro")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("FotoPerfil")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int?>("IdHogar")
                         .HasColumnType("integer");
+
+                    b.Property<string>("IdiomaPreferido")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("NombreVisible")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Rol")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Telefono")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TemaPreferido")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 

@@ -81,10 +81,16 @@ public class UsuariosController : ControllerBase
         if (usuario is null)
             return NotFound();
 
-        // Solo Nombre: Rol e IdHogar no se tocan acá. Cambiarlos exige pasar por sus
-        // endpoints con permisos (PUT {id} para Admin, alta de hogar), así este
-        // endpoint de auto-servicio no puede escalar privilegios.
+        // Auto-servicio: el usuario edita sus datos personales y preferencias.
+        // Rol, IdHogar, Correo y ContrasenaHash NO se tocan acá — requieren
+        // endpoints con permisos específicos (cambio de contraseña, admin, etc.).
         usuario.Nombre = request.Nombre;
+        usuario.Apellido = request.Apellido;
+        usuario.NombreVisible = request.NombreVisible;
+        usuario.FotoPerfil = request.FotoPerfil;
+        usuario.Telefono = request.Telefono;
+        usuario.IdiomaPreferido = request.IdiomaPreferido;
+        usuario.TemaPreferido = request.TemaPreferido;
         await _db.SaveChangesAsync();
         return NoContent();
     }

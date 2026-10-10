@@ -185,7 +185,7 @@ public class AuthFlujoTests : IDisposable
         var controller = new UsuariosController(_db);
         AsignarClaims(controller, usuario.IdUsuario, hogar.IdHogar);
 
-        var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest("Ana Rivera"));
+        var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest { Nombre = "Ana Rivera" });
 
         Assert.IsType<NoContentResult>(result);
         var actualizado = await _db.Usuarios.SingleAsync();
