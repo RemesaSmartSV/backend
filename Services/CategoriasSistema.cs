@@ -30,7 +30,14 @@ public static class CategoriasSistema
         ("Ocio", "Gasto", "\uD83C\uDFAE"),
         ("Compras", "Gasto", "\uD83D\uDECD"),
         ("Deudas", "Gasto", "\uD83D\uDCB3"),
-        ("Otros gastos", "Gasto", "\uD83E\uDDFE")
+        ("Otros gastos", "Gasto", "\uD83E\uDDFE"),
+        ("Fondo de emergencia", "Ahorro", "\uD83C\uDDF8"),
+        ("Vivienda propia", "Ahorro", "\uD83C\uDFE1"),
+        ("Educación futura", "Ahorro", "\uD83C\uDF93"),
+        ("Vehículo", "Ahorro", "\uD83D\uDE97"),
+        ("Viajes", "Ahorro", "\u2708\uFE0F"),
+        ("Tecnología", "Ahorro", "\uD83D\uDCBF"),
+        ("Otros ahorros", "Ahorro", "\uD83D\uDC37")
     };
 
     /// <summary>

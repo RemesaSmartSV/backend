@@ -26,13 +26,13 @@ public class CategoriasSistemaTests : IDisposable
     public void Dispose() => _db.Dispose();
 
     [Fact]
-    public void Predeterminadas_EsDieciseisSinNombresRepetidos()
+    public void Predeterminadas_EsVeintitresSinNombresRepetidos()
     {
-        Assert.Equal(16, CategoriasSistema.Predeterminadas.Length);
+        Assert.Equal(23, CategoriasSistema.Predeterminadas.Length);
         var nombres = CategoriasSistema.Predeterminadas.Select(c => c.Nombre).ToList();
         Assert.Equal(nombres.Count, nombres.Select(CategoriasSistema.Normalizar).Distinct().Count());
         Assert.All(CategoriasSistema.Predeterminadas, c =>
-            Assert.Contains(c.Tipo, new[] { "Ingreso", "Gasto" }));
+            Assert.Contains(c.Tipo, new[] { "Ingreso", "Gasto", "Ahorro" }));
     }
 
     [Fact]
@@ -40,13 +40,14 @@ public class CategoriasSistemaTests : IDisposable
     {
         var creadas = await CategoriasSistema.SeedAsync(_db, Hogar);
 
-        Assert.Equal(16, creadas);
+        Assert.Equal(23, creadas);
 
         var categorias = await _db.Categorias.Where(c => c.IdHogar == Hogar).ToListAsync();
-        Assert.Equal(16, categorias.Count);
+        Assert.Equal(23, categorias.Count);
         Assert.All(categorias, c => Assert.True(c.EsSistema));
         Assert.Equal(6, categorias.Count(c => c.Tipo == "Ingreso"));
         Assert.Equal(10, categorias.Count(c => c.Tipo == "Gasto"));
+        Assert.Equal(7, categorias.Count(c => c.Tipo == "Ahorro"));
     }
 
     [Fact]
@@ -57,7 +58,7 @@ public class CategoriasSistemaTests : IDisposable
         var segunda = await CategoriasSistema.SeedAsync(_db, Hogar);
 
         Assert.Equal(0, segunda);
-        Assert.Equal(16, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
+        Assert.Equal(23, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
     }
 
     [Fact]
@@ -75,7 +76,7 @@ public class CategoriasSistemaTests : IDisposable
 
         var creadas = await CategoriasSistema.SeedAsync(_db, Hogar);
 
-        Assert.Equal(15, creadas);
+        Assert.Equal(22, creadas);
         Assert.Single(await _db.Categorias
             .Where(c => c.IdHogar == Hogar && CategoriasSistema.Normalizar(c.Nombre) == "alimentacion")
             .ToListAsync());
@@ -96,7 +97,7 @@ public class CategoriasSistemaTests : IDisposable
         await CategoriasSistema.SeedAsync(_db, Hogar);
 
         var total = await _db.Categorias.CountAsync(c => c.IdHogar == Hogar);
-        Assert.Equal(17, total);
+        Assert.Equal(24, total);
         Assert.Equal(1, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar && !c.EsSistema));
     }
 
@@ -105,7 +106,7 @@ public class CategoriasSistemaTests : IDisposable
     {
         await CategoriasSistema.SeedAsync(_db, Hogar);
 
-        Assert.Equal(16, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
+        Assert.Equal(23, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
         Assert.Equal(0, await _db.Categorias.CountAsync(c => c.IdHogar == 2));
     }
 
