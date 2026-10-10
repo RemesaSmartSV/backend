@@ -2,13 +2,24 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RemesaSmartSV.DTOs;
 
-public record RegisterRequest(
-    [Required] string Nombre,
-    [Required, EmailAddress] string Correo,
-    [Required, MinLength(6)] string Contrasena,
-    // En un record posicional, Compare (solo válido en propiedades) exige el objetivo
-    // explícito `property:` en su propio grupo de atributos; sin él el compilador da CS0592.
-    [Required][property: Compare(nameof(RegisterRequest.Contrasena))] string ConfirmarContrasena);
+// Clase (no record posicional): Compare solo funciona en propiedades, y en un
+// record posicional la validación se ignora en el pipeline HTTP (500 en
+// Development). Con propiedades, [Compare] se asocia directamente a la
+// propiedad y el model validation de ASP.NET Core lo valida correctamente.
+public class RegisterRequest
+{
+    [Required]
+    public string Nombre { get; set; } = null!;
+
+    [Required, EmailAddress]
+    public string Correo { get; set; } = null!;
+
+    [Required, MinLength(6)]
+    public string Contrasena { get; set; } = null!;
+
+    [Required, Compare(nameof(Contrasena))]
+    public string ConfirmarContrasena { get; set; } = null!;
+}
 
 public record LoginRequest(
     [Required] string Correo,

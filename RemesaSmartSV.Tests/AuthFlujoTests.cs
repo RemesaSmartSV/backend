@@ -78,7 +78,7 @@ public class AuthFlujoTests : IDisposable
         var auth = CrearAuthService();
 
         var response = await auth.RegisterAsync(
-            new RegisterRequest("Ana Rivera", "ana@example.com", "ClaveSegura123", "ClaveSegura123"));
+            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@example.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
 
         Assert.NotNull(response);
         var usuario = await _db.Usuarios.SingleAsync();
@@ -98,11 +98,11 @@ public class AuthFlujoTests : IDisposable
     {
         var auth = CrearAuthService();
         await auth.RegisterAsync(
-            new RegisterRequest("Ana Rivera", "ana@example.com", "ClaveSegura123", "ClaveSegura123"));
+            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@example.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
 
         // El control de duplicados ignora mayusculas, como hace el servicio.
         var duplicado = await auth.RegisterAsync(
-            new RegisterRequest("Otra Persona", "ANA@Example.com", "ClaveSegura123", "ClaveSegura123"));
+            new RegisterRequest { Nombre = "Otra Persona", Correo = "ANA@Example.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
 
         Assert.Null(duplicado);
         Assert.Equal(1, await _db.Usuarios.CountAsync());
@@ -198,8 +198,13 @@ public class AuthFlujoTests : IDisposable
     [Fact]
     public void RegisterRequest_ConfirmarContrasenaDistinto_CompareDevuelveError()
     {
-        var request = new RegisterRequest(
-            "Ana Rivera", "ana@example.com", "ClaveSegura123", "ClaveQueNoCoincide");
+        var request = new RegisterRequest
+        {
+            Nombre = "Ana Rivera",
+            Correo = "ana@example.com",
+            Contrasena = "ClaveSegura123",
+            ConfirmarContrasena = "ClaveQueNoCoincide"
+        };
 
         var resultados = new List<ValidationResult>();
         var esValido = Validator.TryValidateObject(
@@ -213,8 +218,13 @@ public class AuthFlujoTests : IDisposable
     [Fact]
     public void RegisterRequest_ConfirmarContrasenaIgual_PasaValidacion()
     {
-        var request = new RegisterRequest(
-            "Ana Rivera", "ana@example.com", "ClaveSegura123", "ClaveSegura123");
+        var request = new RegisterRequest
+        {
+            Nombre = "Ana Rivera",
+            Correo = "ana@example.com",
+            Contrasena = "ClaveSegura123",
+            ConfirmarContrasena = "ClaveSegura123"
+        };
 
         var resultados = new List<ValidationResult>();
         var esValido = Validator.TryValidateObject(
