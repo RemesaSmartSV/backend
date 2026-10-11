@@ -394,6 +394,13 @@ namespace RemesaSmartSV.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("ResetToken")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ResetTokenExpiry")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Rol")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
