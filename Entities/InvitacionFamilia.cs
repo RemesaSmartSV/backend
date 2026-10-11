@@ -9,6 +9,7 @@ public class InvitacionFamilia
     public const string EstadoPendiente = "Pendiente";
     public const string EstadoAceptada = "Aceptada";
     public const string EstadoRechazada = "Rechazada";
+    public const string EstadoCancelada = "Cancelada";
 
     [Key]
     public int IdInvitacion { get; set; }
@@ -27,7 +28,7 @@ public class InvitacionFamilia
 
     [Required]
     [StringLength(20)]
-    [AllowedValues(EstadoPendiente, EstadoAceptada, EstadoRechazada)]
+    [AllowedValues(EstadoPendiente, EstadoAceptada, EstadoRechazada, EstadoCancelada)]
     public string Estado { get; set; } = EstadoPendiente;
 
     [Required]

@@ -207,4 +207,43 @@ public class InvitacionesController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Cancela una invitación pendiente (solo Admin del hogar).</summary>
+    /// <response code="204">La invitación fue cancelada.</response>
+    /// <response code="403">El usuario no es Admin del hogar.</response>
+    /// <response code="404">La invitación no existe o no está pendiente.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [HttpPost("{id}/cancelar")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Cancelar(int id)
+    {
+        var invitacion = await _db.InvitacionesFamilia
+            .FirstOrDefaultAsync(i => i.IdInvitacion == id && i.IdHogar == User.GetIdHogar());
+        if (invitacion is null || invitacion.Estado != InvitacionFamilia.EstadoPendiente)
+            return NotFound();
+
+        invitacion.Estado = InvitacionFamilia.EstadoCancelada;
+        invitacion.FechaRespuesta = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Reenvía una invitación pendiente (actualiza la fecha de envío).</summary>
+    /// <response code="204">La invitación fue reenviada.</response>
+    /// <response code="403">El usuario no es Admin del hogar.</response>
+    /// <response code="404">La invitación no existe o no está pendiente.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [HttpPost("{id}/reenviar")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Reenviar(int id)
+    {
+        var invitacion = await _db.InvitacionesFamilia
+            .FirstOrDefaultAsync(i => i.IdInvitacion == id && i.IdHogar == User.GetIdHogar());
+        if (invitacion is null || invitacion.Estado != InvitacionFamilia.EstadoPendiente)
+            return NotFound();
+
+        invitacion.FechaEnvio = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }

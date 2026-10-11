@@ -336,5 +336,68 @@ public class InvitacionesNotificacionesTests : IDisposable
         Assert.Equal(2, await _db.Notificaciones.CountAsync(n => n.IdUsuario == 1 && n.Leida));
         Assert.Equal(0, await _db.Notificaciones.CountAsync(n => n.IdUsuario == 2 && n.Leida));
     }
+
+    // ---------- Protecciones de familia ----------
+
+    [Fact]
+    public async Task Cancelar_InvitacionPendiente_LaMarcaCancelada()
+    {
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 1,
+            Correo = "ana@demo.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+        };
+        await _db.InvitacionesFamilia.AddAsync(invitacion);
+        await _db.SaveChangesAsync();
+
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var resultado = await controller.Cancelar(invitacion.IdInvitacion);
+
+        Assert.IsType<NoContentResult>(resultado);
+        Assert.Equal(InvitacionFamilia.EstadoCancelada, invitacion.Estado);
+    }
+
+    [Fact]
+    public async Task Cancelar_InvitacionAceptada_RetornaNotFound()
+    {
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 1,
+            Correo = "ana@demo.com",
+            Estado = InvitacionFamilia.EstadoAceptada,
+        };
+        await _db.InvitacionesFamilia.AddAsync(invitacion);
+        await _db.SaveChangesAsync();
+
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var resultado = await controller.Cancelar(invitacion.IdInvitacion);
+
+        Assert.IsType<NotFoundResult>(resultado);
+    }
+
+    [Fact]
+    public async Task Reenviar_InvitacionPendiente_ActualizaFecha()
+    {
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 1,
+            Correo = "ana@demo.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+            FechaEnvio = DateTime.UtcNow.AddDays(-5),
+        };
+        await _db.InvitacionesFamilia.AddAsync(invitacion);
+        await _db.SaveChangesAsync();
+
+        var fechaAnterior = invitacion.FechaEnvio;
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var resultado = await controller.Reenviar(invitacion.IdInvitacion);
+
+        Assert.IsType<NoContentResult>(resultado);
+        Assert.True(invitacion.FechaEnvio > fechaAnterior);
+    }
 }
 

@@ -232,4 +232,52 @@ public class AuthFlujoTests : IDisposable
 
         Assert.True(esValido);
     }
+
+    [Fact]
+    public async Task Delete_UltimoAdmin_RetornaBadRequest()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()).Options;
+        await using var db = new ApplicationDbContext(options);
+
+        var admin = new Usuario { Nombre = "Admin", Correo = "admin@test.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
+        db.Usuarios.Add(admin);
+        await db.SaveChangesAsync();
+
+        var controller = new UsuariosController(db);
+        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "Test")) },
+        };
+
+        var result = await controller.Delete(admin.IdUsuario);
+
+        var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result);
+        Assert.Contains("último administrador", badRequest.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task Update_DegradarUltimoAdmin_RetornaBadRequest()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()).Options;
+        await using var db = new ApplicationDbContext(options);
+
+        var admin = new Usuario { Nombre = "Admin", Correo = "admin@test.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
+        db.Usuarios.Add(admin);
+        await db.SaveChangesAsync();
+
+        var controller = new UsuariosController(db);
+        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
+        controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
+        {
+            HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "Test")) },
+        };
+
+        var result = await controller.Update(admin.IdUsuario, new UpdateUsuarioRequest(null, "Miembro"));
+
+        var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result);
+        Assert.Contains("último administrador", badRequest.Value?.ToString());
+    }
 }

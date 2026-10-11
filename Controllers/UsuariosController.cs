@@ -115,6 +115,18 @@ public class UsuariosController : ControllerBase
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == User.GetIdHogar());
         if (usuario is null)
             return NotFound();
+
+        // Protección: no degradar al último Admin a Miembro.
+        if (!string.IsNullOrWhiteSpace(request.Rol)
+            && request.Rol == "Miembro"
+            && usuario.Rol == "Admin")
+        {
+            var otrosAdmins = await _db.Usuarios
+                .CountAsync(u => u.IdHogar == usuario.IdHogar && u.Rol == "Admin" && u.IdUsuario != id);
+            if (otrosAdmins == 0)
+                return BadRequest(new { message = "No puedes quitar el rol de Admin al último administrador del hogar." });
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Nombre))
             usuario.Nombre = request.Nombre;
         if (!string.IsNullOrWhiteSpace(request.Rol))
@@ -144,6 +156,16 @@ public class UsuariosController : ControllerBase
             return NotFound();
         if (usuario.IdUsuario == User.GetIdUsuario())
             return BadRequest(new { message = "No puedes eliminar tu propio usuario." });
+
+        // Protección: no eliminar al último Admin del hogar.
+        if (usuario.Rol == "Admin")
+        {
+            var otrosAdmins = await _db.Usuarios
+                .CountAsync(u => u.IdHogar == usuario.IdHogar && u.Rol == "Admin" && u.IdUsuario != id);
+            if (otrosAdmins == 0)
+                return BadRequest(new { message = "No puedes eliminar al último administrador del hogar." });
+        }
+
         _db.Usuarios.Remove(usuario);
         await _db.SaveChangesAsync();
         return NoContent();
