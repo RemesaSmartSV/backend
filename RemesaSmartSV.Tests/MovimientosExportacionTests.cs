@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using RemesaSmartSV.Controllers;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
+using RemesaSmartSV.Services;
 
 namespace RemesaSmartSV.Tests;
 
@@ -13,6 +14,15 @@ public class MovimientosExportacionTests : IDisposable
     private readonly ApplicationDbContext _db;
     private readonly MovimientosController _controller;
 
+    private class EmailStub : IEmailService
+    {
+        public Task<bool> EnviarInvitacionFamiliarAsync(string a, string b, string c, string d) => Task.FromResult(true);
+        public Task<bool> EnviarResetContrasenaAsync(string a, string b) => Task.FromResult(true);
+        public Task<bool> EnviarAlertaPresupuestoAsync(string a, string b, string c, decimal d, decimal e, decimal f) => Task.FromResult(true);
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string a, string b, string c, decimal d, decimal e) => Task.FromResult(true);
+        public Task<bool> EnviarNotificacionCuentaAsync(string a, string b, string c) => Task.FromResult(true);
+    }
+
     public MovimientosExportacionTests()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -20,7 +30,7 @@ public class MovimientosExportacionTests : IDisposable
             .Options;
 
         _db = new ApplicationDbContext(options);
-        _controller = new MovimientosController(_db);
+        _controller = new MovimientosController(_db, new EmailStub());
 
         var claims = new List<Claim> { new("idHogar", "1") };
         _controller.ControllerContext = new ControllerContext

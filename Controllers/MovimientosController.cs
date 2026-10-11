@@ -17,8 +17,13 @@ namespace RemesaSmartSV.Controllers;
 public class MovimientosController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly IEmailService _email;
 
-    public MovimientosController(ApplicationDbContext db) => _db = db;
+    public MovimientosController(ApplicationDbContext db, IEmailService email)
+    {
+        _db = db;
+        _email = email;
+    }
 
     /// <summary>Obtiene los movimientos del hogar con filtros opcionales y paginación.</summary>
     /// <param name="categoriaId">Filtra por identificador de categoría cuando se especifica.</param>
@@ -175,7 +180,68 @@ public class MovimientosController : ControllerBase
         movimiento.IdUsuario = User.GetIdUsuario();
         _db.Movimientos.Add(movimiento);
         await _db.SaveChangesAsync();
+
+        // Alerta de presupuesto: si es un gasto y cruza el 80% o 100% del límite,
+        // envía correo (una vez por cruce, no por cada movimiento).
+        if (movimiento.Tipo == "Gasto" && movimiento.IdCategoria > 0)
+        {
+            _ = VerificarAlertaPresupuesto(movimiento);
+        }
+
         return CreatedAtAction(nameof(GetMovimiento), new { id = movimiento.IdMovimiento }, movimiento);
+    }
+
+    private async Task VerificarAlertaPresupuesto(Movimiento movimiento)
+    {
+        try
+        {
+            var mesAnio = new DateTime(movimiento.Fecha.Year, movimiento.Fecha.Month, 1);
+            var presupuesto = await _db.Presupuestos
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.IdHogar == movimiento.IdHogar
+                    && p.IdCategoria == movimiento.IdCategoria
+                    && p.MesAnio == mesAnio);
+
+            if (presupuesto is null) return;
+
+            var gastado = await _db.Movimientos
+                .AsNoTracking()
+                .Where(m => m.IdHogar == movimiento.IdHogar
+                    && m.IdCategoria == movimiento.IdCategoria
+                    && m.Tipo == "Gasto"
+                    && m.Fecha.Year == movimiento.Fecha.Year
+                    && m.Fecha.Month == movimiento.Fecha.Month)
+                .SumAsync(m => (decimal?)m.Monto) ?? 0m;
+
+            var porcentaje = presupuesto.MontoLimite > 0
+                ? Math.Round(gastado / presupuesto.MontoLimite * 100, 1)
+                : 0;
+
+            var usuario = await _db.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.IdUsuario == movimiento.IdUsuario);
+
+            if (usuario is null) return;
+
+            if (gastado > presupuesto.MontoLimite)
+            {
+                await _email.EnviarPresupuestoExcedidoAsync(
+                    usuario.Correo, usuario.Nombre,
+                    presupuesto.Categoria?.Nombre ?? "Presupuesto",
+                    presupuesto.MontoLimite, gastado);
+            }
+            else if (porcentaje >= 80)
+            {
+                await _email.EnviarAlertaPresupuestoAsync(
+                    usuario.Correo, usuario.Nombre,
+                    presupuesto.Categoria?.Nombre ?? "Presupuesto",
+                    presupuesto.MontoLimite, gastado, porcentaje);
+            }
+        }
+        catch
+        {
+            // La alerta no debe bloquear la operación financiera.
+        }
     }
 
     /// <summary>Actualiza un movimiento del hogar.</summary>
