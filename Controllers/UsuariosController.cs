@@ -15,8 +15,13 @@ namespace RemesaSmartSV.Controllers;
 public class UsuariosController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly AuthService _authService;
 
-    public UsuariosController(ApplicationDbContext db) => _db = db;
+    public UsuariosController(ApplicationDbContext db, AuthService authService)
+    {
+        _db = db;
+        _authService = authService;
+    }
 
     /// <summary>Obtiene los miembros del hogar del usuario actual.</summary>
     /// <response code="200">Devuelve la lista de miembros del hogar.</response>
@@ -193,5 +198,42 @@ public class UsuariosController : ControllerBase
         usuario.ResetTokenExpiry = null;
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>Abandona la familia actual del usuario autenticado.</summary>
+    /// <remarks>
+    /// Un miembro normal puede salir libremente. Un Admin solo puede salir si hay otro Admin
+    /// que pueda quedar a cargo (evita dejar la familia sin administración).
+    /// No elimina datos financieros: solo desvincula al usuario del hogar.
+    /// </remarks>
+    /// <response code="200">LoginResponse refrescado sin hogar.</response>
+    /// <response code="400">No perteneces a ninguna familia o eres el último Admin.</response>
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [HttpPost("abandonar-familia")]
+    public async Task<ActionResult<LoginResponse>> AbandonarFamilia()
+    {
+        var idUsuario = User.GetIdUsuario();
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        if (usuario is null)
+            return NotFound();
+
+        if (usuario.IdHogar is null or 0)
+            return BadRequest(new { message = "No perteneces a ninguna familia." });
+
+        // Si es Admin, verificar que quede al menos otro Admin.
+        if (usuario.Rol == "Admin")
+        {
+            var otrosAdmins = await _db.Usuarios
+                .CountAsync(u => u.IdHogar == usuario.IdHogar && u.Rol == "Admin" && u.IdUsuario != idUsuario);
+            if (otrosAdmins == 0)
+                return BadRequest(new { message = "Eres el último administrador. Transfiere la administración a otro miembro antes de abandonar la familia." });
+        }
+
+        usuario.IdHogar = null;
+        usuario.Rol = null;
+        await _db.SaveChangesAsync();
+
+        return Ok(_authService.BuildLoginResponse(usuario));
     }
 }

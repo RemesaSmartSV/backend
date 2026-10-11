@@ -182,7 +182,7 @@ public class AuthFlujoTests : IDisposable
         _db.Usuarios.Add(usuario);
         await _db.SaveChangesAsync();
 
-        var controller = new UsuariosController(_db);
+        var controller = new UsuariosController(_db, new AuthService(_db, _config));
         AsignarClaims(controller, usuario.IdUsuario, hogar.IdHogar);
 
         var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest { Nombre = "Ana Rivera" });
@@ -244,7 +244,7 @@ public class AuthFlujoTests : IDisposable
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 
-        var controller = new UsuariosController(db);
+        var controller = new UsuariosController(db, new AuthService(db, _config));
         var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
@@ -268,7 +268,7 @@ public class AuthFlujoTests : IDisposable
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 
-        var controller = new UsuariosController(db);
+        var controller = new UsuariosController(db, new AuthService(db, _config));
         var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
