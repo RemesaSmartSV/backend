@@ -121,4 +121,95 @@ public class SmtpEmailService : IEmailService
 
         return EnviarAsync(correoDestino, "Restablecer contraseña - RemesaSmart SV", html, texto);
     }
+
+    public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var enlace = $"{baseUrl}/presupuestos";
+
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f3f4f6">
+                <div style="background:#123B8F;padding:20px;border-radius:10px 10px 0 0;text-align:center">
+                    <h1 style="color:white;margin:0">RemesaSmart SV</h1>
+                </div>
+                <div style="background:white;padding:30px;border-radius:0 0 10px 10px">
+                    <h2 style="color:#1f2937">Aviso de presupuesto</h2>
+                    <p style="color:#4b5563;line-height:1.6">Hola <strong>{nombreUsuario}</strong>,</p>
+                    <p style="color:#4b5563;line-height:1.6">
+                        Tu presupuesto <strong>{nombrePresupuesto}</strong> ha alcanzado el <strong>{porcentaje}%</strong> de su límite.
+                    </p>
+                    <div style="background:#f9fafb;padding:20px;border-radius:8px;margin:20px 0">
+                        <p style="margin:5px 0;color:#4b5563"><strong>Límite:</strong> ${montoLimite:F2}</p>
+                        <p style="margin:5px 0;color:#4b5563"><strong>Gastado:</strong> ${montoGastado:F2}</p>
+                        <div style="background:#e5e7eb;border-radius:4px;height:8px;margin-top:10px">
+                            <div style="background:{(porcentaje >= 100 ? "#dc2626" : "#f59e0b")};border-radius:4px;height:8px;width:{Math.Min(porcentaje, 100):F0}%"></div>
+                        </div>
+                    </div>
+                    <div style="text-align:center;margin:30px 0">
+                        <a href="{enlace}" style="background:#2563eb;color:white;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold">
+                            Ver presupuesto
+                        </a>
+                    </div>
+                </div>
+            </div>
+            """;
+
+        var texto = $"RemesaSmart SV - Tu presupuesto {nombrePresupuesto} alcanzó el {porcentaje}% de su límite (${montoGastado:F2} de ${montoLimite:F2}).";
+
+        return EnviarAsync(correoDestino, "Aviso de presupuesto familiar — RemesaSmart SV", html, texto);
+    }
+
+    public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var enlace = $"{baseUrl}/presupuestos";
+        var diferencia = montoGastado - montoLimite;
+
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f3f4f6">
+                <div style="background:#dc2626;padding:20px;border-radius:10px 10px 0 0;text-align:center">
+                    <h1 style="color:white;margin:0">⚠️ Presupuesto excedido</h1>
+                </div>
+                <div style="background:white;padding:30px;border-radius:0 0 10px 10px">
+                    <p style="color:#4b5563;line-height:1.6">Hola <strong>{nombreUsuario}</strong>,</p>
+                    <p style="color:#4b5563;line-height:1.6">
+                        Tu presupuesto <strong>{nombrePresupuesto}</strong> ha superado su límite establecido.
+                    </p>
+                    <div style="background:#fef2f2;padding:20px;border-radius:8px;margin:20px 0;border-left:4px solid #dc2626">
+                        <p style="margin:5px 0;color:#4b5563"><strong>Límite:</strong> ${montoLimite:F2}</p>
+                        <p style="margin:5px 0;color:#4b5563"><strong>Total registrado:</strong> ${montoGastado:F2}</p>
+                        <p style="margin:5px 0;color:#dc2626;font-weight:bold"><strong>Exceso:</strong> ${diferencia:F2}</p>
+                    </div>
+                    <div style="text-align:center;margin:30px 0">
+                        <a href="{enlace}" style="background:#dc2626;color:white;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold">
+                            Ver detalles
+                        </a>
+                    </div>
+                </div>
+            </div>
+            """;
+
+        var texto = $"RemesaSmart SV - Tu presupuesto {nombrePresupuesto} excedió el límite (${montoGastado:F2} de ${montoLimite:F2}, exceso ${diferencia:F2}).";
+
+        return EnviarAsync(correoDestino, "Tu presupuesto ha superado el límite establecido", html, texto);
+    }
+
+    public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje)
+    {
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f3f4f6">
+                <div style="background:#123B8F;padding:20px;border-radius:10px 10px 0 0;text-align:center">
+                    <h1 style="color:white;margin:0">RemesaSmart SV</h1>
+                </div>
+                <div style="background:white;padding:30px;border-radius:0 0 10px 10px">
+                    <p style="color:#4b5563;line-height:1.6">{mensaje}</p>
+                    <p style="color:#6b7280;font-size:13px">Si no reconoces esta actividad, revisa la seguridad de tu cuenta.</p>
+                </div>
+            </div>
+            """;
+
+        var texto = $"RemesaSmart SV - {asunto}: {mensaje}";
+
+        return EnviarAsync(correoDestino, asunto, html, texto);
+    }
 }

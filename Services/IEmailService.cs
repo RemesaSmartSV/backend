@@ -9,4 +9,7 @@ public interface IEmailService
 {
     Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token);
     Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token);
+    Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje);
+    Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado);
+    Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje);
 }

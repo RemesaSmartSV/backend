@@ -40,6 +40,9 @@ public class InvitacionesNotificacionesTests : IDisposable
     {
         public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token) => Task.FromResult(true);
         public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token) => Task.FromResult(true);
+        public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje) => Task.FromResult(true);
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado) => Task.FromResult(true);
+        public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje) => Task.FromResult(true);
     }
 
     private static InvitacionesController CrearInvitaciones(
