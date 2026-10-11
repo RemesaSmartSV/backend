@@ -94,3 +94,6 @@ public class ResetContrasenaRequest
     [Required, Compare(nameof(NuevaContrasena))] public string ConfirmarNueva { get; set; } = null!;
 }
 
+// Login con Google: el frontend envía el ID token de Google Identity Services.
+public record GoogleLoginRequest([Required] string IdToken);
+

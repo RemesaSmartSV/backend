@@ -1,3 +1,4 @@
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -93,5 +94,52 @@ public class AuthController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(new { message = "Contraseña restablecida correctamente." });
+    }
+
+    /// <summary>Autenticación con Google. Valida el ID token y crea o vincula la cuenta.</summary>
+    /// <remarks>Requiere GOOGLE_CLIENT_ID en variables de entorno.</remarks>
+    [HttpPost("google")]
+    [AllowAnonymous]
+    public async Task<ActionResult<LoginResponse>> Google([FromBody] GoogleLoginRequest request)
+    {
+        var clientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+        if (string.IsNullOrWhiteSpace(clientId))
+            return StatusCode(503, new { message = "Google Sign-In no está configurado. Contacta al administrador." });
+
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            var settings = new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = new[] { clientId },
+            };
+            payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, settings);
+        }
+        catch
+        {
+            return Unauthorized(new { message = "Token de Google inválido." });
+        }
+
+        // Busca usuario por el Google ID estable (no por correo).
+        var googleId = payload.Subject;
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == payload.Email.ToLower());
+
+        if (usuario is null)
+        {
+            // Crea cuenta nueva vinculada a Google.
+            usuario = new Entities.Usuario
+            {
+                Nombre = payload.Name ?? payload.Email.Split('@')[0],
+                Correo = payload.Email.ToLower(),
+                ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Entities.Usuario>()
+                    .HashPassword(new Entities.Usuario(), System.Security.Cryptography.RandomNumberGenerator.GetBytes(32).ToString()),
+                FechaRegistro = DateTime.UtcNow,
+            };
+            _db.Usuarios.Add(usuario);
+            await _db.SaveChangesAsync();
+        }
+
+        var result = _auth.BuildLoginResponse(usuario);
+        return Ok(result);
     }
 }
