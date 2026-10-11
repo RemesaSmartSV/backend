@@ -51,6 +51,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Falta la clave Jwt:Key en la configuración.");

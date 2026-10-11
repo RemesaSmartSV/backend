@@ -36,6 +36,12 @@ public class InvitacionesNotificacionesTests : IDisposable
             ["Jwt:Audience"] = "RemesaSmartSVClient",
         }).Build();
 
+    private class EmailStub : Services.IEmailService
+    {
+        public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token) => Task.FromResult(true);
+        public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token) => Task.FromResult(true);
+    }
+
     private static InvitacionesController CrearInvitaciones(
         ApplicationDbContext db,
         int idUsuario,
@@ -43,7 +49,7 @@ public class InvitacionesNotificacionesTests : IDisposable
         string correo,
         string rol = "Admin")
     {
-        var controller = new InvitacionesController(db, new AuthService(db, ConfigFalsa()));
+        var controller = new InvitacionesController(db, new AuthService(db, ConfigFalsa()), new EmailStub());
         var claims = new List<Claim>
         {
             new("idUsuario", idUsuario.ToString()),

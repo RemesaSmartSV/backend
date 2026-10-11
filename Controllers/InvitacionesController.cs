@@ -21,11 +21,13 @@ public class InvitacionesController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     private readonly AuthService _authService;
+    private readonly IEmailService _email;
 
-    public InvitacionesController(ApplicationDbContext db, AuthService authService)
+    public InvitacionesController(ApplicationDbContext db, AuthService authService, IEmailService email)
     {
         _db = db;
         _authService = authService;
+        _email = email;
     }
 
     /// <summary>Lista las invitaciones pendientes del usuario autenticado (por id asignado o por correo).</summary>
@@ -112,6 +114,19 @@ public class InvitacionesController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        // Envía correo de invitación (no bloquea si falla — la invitación queda en BD).
+        var nombreHogar = await _db.Hogares
+            .Where(h => h.IdHogar == idHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+        var nombreInvitador = await _db.Usuarios
+            .Where(u => u.IdUsuario == User.GetIdUsuario())
+            .Select(u => u.Nombre)
+            .FirstOrDefaultAsync() ?? "Alguien";
+
+        _ = _email.EnviarInvitacionFamiliarAsync(correo, nombreHogar, nombreInvitador, invitacion.IdInvitacion.ToString());
+
         return CreatedAtAction(nameof(MisInvitaciones), new { }, invitacion);
     }
 

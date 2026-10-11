@@ -16,11 +16,13 @@ public class AuthController : ControllerBase
 {
     private readonly AuthService _auth;
     private readonly ApplicationDbContext _db;
+    private readonly IEmailService _email;
 
-    public AuthController(AuthService auth, ApplicationDbContext db)
+    public AuthController(AuthService auth, ApplicationDbContext db, IEmailService email)
     {
         _auth = auth;
         _db = db;
+        _email = email;
     }
 
     /// <summary>Registra un usuario sin hogar. El hogar se crea después con POST api/hogares.</summary>
@@ -68,8 +70,7 @@ public class AuthController : ControllerBase
             usuario.ResetTokenExpiry = DateTime.UtcNow.AddHours(1);
             await _db.SaveChangesAsync();
 
-            // TODO Fase9: enviar correo con el token. Por ahora se loguea solo en desarrollo.
-            Console.WriteLine($"[RESET] Token para {usuario.Correo}: {token}");
+            _ = _email.EnviarResetContrasenaAsync(usuario.Correo, token);
         }
 
         // Respuesta genérica: no revela si la cuenta existe.
