@@ -170,4 +170,28 @@ public class UsuariosController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Cambia la contraseña del usuario autenticado.</summary>
+    /// <response code="204">La contraseña fue actualizada.</response>
+    /// <response code="400">La contraseña actual es incorrecta o las nuevas no coinciden.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [HttpPut("cambiar-contrasena")]
+    public async Task<IActionResult> CambiarContrasena([FromBody] CambiarContrasenaRequest request)
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        var hasher = new PasswordHasher<Usuario>();
+        var resultado = hasher.VerifyHashedPassword(usuario, usuario.ContrasenaHash, request.ContrasenaActual);
+        if (resultado == PasswordVerificationResult.Failed)
+            return BadRequest(new { message = "La contraseña actual es incorrecta." });
+
+        usuario.ContrasenaHash = hasher.HashPassword(usuario, request.NuevaContrasena);
+        usuario.ResetToken = null;
+        usuario.ResetTokenExpiry = null;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }

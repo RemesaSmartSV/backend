@@ -33,6 +33,11 @@ public class Usuario
     [StringLength(20)]
     public string? TemaPreferido { get; set; }
 
+    [StringLength(100)]
+    public string? ResetToken { get; set; }
+
+    public DateTime? ResetTokenExpiry { get; set; }
+
     [Required]
     [StringLength(150)]
     [EmailAddress]

@@ -75,3 +75,22 @@ public record ResumenDashboardDTO(decimal TotalIngresos, decimal TotalGastos, de
 public record InvitarRequest(
     [Required, EmailAddress] string Correo);
 
+// Cambio de contraseña (auto-servicio).
+public class CambiarContrasenaRequest
+{
+    [Required] public string ContrasenaActual { get; set; } = null!;
+    [Required, MinLength(6)] public string NuevaContrasena { get; set; } = null!;
+    [Required, Compare(nameof(NuevaContrasena))] public string ConfirmarNueva { get; set; } = null!;
+}
+
+// Solicitud de restablecimiento de contraseña.
+public record SolicitarResetRequest([Required, EmailAddress] string Correo);
+
+// Restablecimiento de contraseña con token.
+public class ResetContrasenaRequest
+{
+    [Required] public string Token { get; set; } = null!;
+    [Required, MinLength(6)] public string NuevaContrasena { get; set; } = null!;
+    [Required, Compare(nameof(NuevaContrasena))] public string ConfirmarNueva { get; set; } = null!;
+}
+
