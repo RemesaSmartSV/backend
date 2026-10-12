@@ -43,6 +43,11 @@ public class Usuario
     [EmailAddress]
     public string Correo { get; set; } = null!;
 
+    // Identidad estable del proveedor externo (Google sub). Nullable para conservar
+    // las cuentas locales existentes; el índice único permite múltiples NULL en PostgreSQL.
+    [StringLength(255)]
+    public string? GoogleSubject { get; set; }
+
     [Required]
     [StringLength(255)]
     [JsonIgnore]

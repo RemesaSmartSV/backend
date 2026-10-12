@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Services;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace RemesaSmartSV.Controllers;
 
@@ -17,12 +19,16 @@ public class AuthController : ControllerBase
     private readonly AuthService _auth;
     private readonly ApplicationDbContext _db;
     private readonly IEmailService _email;
+    private readonly IConfiguration _configuration;
+    private readonly GoogleNonceStore _googleNonces;
 
-    public AuthController(AuthService auth, ApplicationDbContext db, IEmailService email)
+    public AuthController(AuthService auth, ApplicationDbContext db, IEmailService email, IConfiguration configuration, GoogleNonceStore googleNonces)
     {
         _auth = auth;
         _db = db;
         _email = email;
+        _configuration = configuration;
+        _googleNonces = googleNonces;
     }
 
     /// <summary>Registra un usuario sin hogar. El hogar se crea después con POST api/hogares.</summary>
@@ -40,6 +46,9 @@ public class AuthController : ControllerBase
     {
         if (!string.Equals(request.Contrasena, request.ConfirmarContrasena, StringComparison.Ordinal))
             return BadRequest(new { message = "Las contraseñas no coinciden." });
+
+        if (!AuthService.EsCorreoGmail(request.Correo))
+            return BadRequest(new { code = "gmail_required", message = "Solo se permiten cuentas con direcciones de correo @gmail.com." });
 
         var result = await _auth.RegisterAsync(request);
         if (result is null)
@@ -99,11 +108,19 @@ public class AuthController : ControllerBase
 
     /// <summary>Autenticación con Google. Valida el ID token y crea o vincula la cuenta.</summary>
     /// <remarks>Requiere GOOGLE_CLIENT_ID en variables de entorno.</remarks>
+    [HttpGet("google-nonce")]
+    [AllowAnonymous]
+    public ActionResult GoogleNonce()
+    {
+        Response.Headers.CacheControl = "no-store, no-cache, max-age=0";
+        return Ok(new { nonce = _googleNonces.Create() });
+    }
+
     [HttpPost("google")]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Google([FromBody] GoogleLoginRequest request)
     {
-        var clientId = Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
+        var clientId = _configuration["GOOGLE_CLIENT_ID"];
         if (string.IsNullOrWhiteSpace(clientId))
             return StatusCode(503, new { message = "Google Sign-In no está configurado. Contacta al administrador." });
 
@@ -121,27 +138,74 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Token de Google inválido." });
         }
 
+        var tokenNonce = payload.Nonce ?? string.Empty;
+        var requestNonce = request.Nonce ?? string.Empty;
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(tokenNonce), Encoding.UTF8.GetBytes(requestNonce))
+            || !_googleNonces.TryConsume(requestNonce))
+            return Unauthorized(new { message = "El desafío de autenticación de Google expiró o no es válido. Inténtalo de nuevo." });
+
         // Política: solo se permiten cuentas @gmail.com.
+        if (string.IsNullOrWhiteSpace(payload.Email) || !payload.EmailVerified)
+            return Unauthorized(new { message = "Google debe devolver una dirección de correo verificada." });
+        if (string.IsNullOrWhiteSpace(payload.Subject))
+            return Unauthorized(new { message = "Google no devolvió un identificador estable de cuenta." });
+
         if (!AuthService.EsCorreoGmail(payload.Email))
             return BadRequest(new { message = "Solo se permiten cuentas con direcciones de correo @gmail.com." });
 
-        // Busca usuario por el Google ID estable (no por correo).
-        var googleId = payload.Subject;
-        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == payload.Email.ToLower());
+        // El subject de Google es la identidad estable. Un correo verificado permite
+        // vincular una cuenta local existente solo si coincide exactamente.
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.GoogleSubject == payload.Subject);
+
+        if (usuario is not null && !string.Equals(usuario.Correo, payload.Email, StringComparison.OrdinalIgnoreCase))
+            return Conflict(new { message = "La identidad de Google no coincide con el correo vinculado a esta cuenta." });
 
         if (usuario is null)
         {
-            // Crea cuenta nueva vinculada a Google.
+            usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == payload.Email.ToLower());
+            if (usuario is not null && usuario.GoogleSubject is not null && usuario.GoogleSubject != payload.Subject)
+                return Conflict(new { message = "Esta cuenta ya está vinculada a otra identidad de Google." });
+        }
+
+        if (usuario is null)
+        {
             usuario = new Entities.Usuario
             {
                 Nombre = payload.Name ?? payload.Email.Split('@')[0],
                 Correo = payload.Email.ToLower(),
-                ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Entities.Usuario>()
-                    .HashPassword(new Entities.Usuario(), System.Security.Cryptography.RandomNumberGenerator.GetBytes(32).ToString()),
                 FechaRegistro = DateTime.UtcNow,
+                GoogleSubject = payload.Subject,
             };
+            var passwordCasual = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+            usuario.ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Entities.Usuario>()
+                .HashPassword(usuario, passwordCasual);
             _db.Usuarios.Add(usuario);
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Un alta concurrente con el mismo subject/email no debe crear duplicados.
+                _db.ChangeTracker.Clear();
+                usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.GoogleSubject == payload.Subject);
+                if (usuario is null)
+                    return Conflict(new { message = "La cuenta ya existe. Inicia sesión con Google nuevamente." });
+            }
+        }
+        else if (usuario.GoogleSubject is null)
+        {
+            // Vinculación segura: solo tras validar firma/audience y email_verified de Google,
+            // y únicamente si el Gmail verificado coincide con el correo local existente.
+            usuario.GoogleSubject = payload.Subject;
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                return Conflict(new { message = "Esta cuenta ya está vinculada a otra identidad de Google." });
+            }
         }
 
         var result = _auth.BuildLoginResponse(usuario);

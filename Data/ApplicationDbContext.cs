@@ -33,6 +33,10 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(u => u.IdHogar)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Usuario>()
+            .HasIndex(u => u.GoogleSubject)
+            .IsUnique();
+
         modelBuilder.Entity<AporteMeta>()
             .HasOne(a => a.Usuario)
             .WithMany()
@@ -66,6 +70,7 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Notificacion>()
             .HasIndex(n => new { n.IdUsuario, n.Leida });
+
     }
 }
 

@@ -196,6 +196,19 @@ public class AuthFlujoTests : IDisposable
     }
 
     [Fact]
+    public async Task UsuariosController_AddMember_DominioNoGmail_RechazaSinCrearCuenta()
+    {
+        var controller = new UsuariosController(_db, CrearAuthService());
+        AsignarClaims(controller, idUsuario: 1, idHogarClaim: 7);
+
+        var resultado = await controller.AddMember(
+            new AddMemberRequest("Legacy", "legacy@example.org", "ClaveSegura123", "Miembro"));
+
+        Assert.IsType<BadRequestObjectResult>(resultado.Result);
+        Assert.Empty(await _db.Usuarios.ToListAsync());
+    }
+
+    [Fact]
     public void RegisterRequest_ConfirmarContrasenaDistinto_CompareDevuelveError()
     {
         var request = new RegisterRequest
@@ -279,5 +292,36 @@ public class AuthFlujoTests : IDisposable
 
         var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result);
         Assert.Contains("último administrador", badRequest.Value?.ToString());
+    }
+
+    [Theory]
+    [InlineData("usuario@gmail.com", true)]
+    [InlineData("USUARIO@GMAIL.COM", true)]
+    [InlineData("usuario@gmail.com.attacker.test", false)]
+    [InlineData("usuario@example.com", false)]
+    [InlineData("", false)]
+    public void EsCorreoGmail_AplicaDominioExacto(string correo, bool esperado)
+        => Assert.Equal(esperado, AuthService.EsCorreoGmail(correo));
+
+    [Fact]
+    public async Task LoginAsync_CuentaLegacyNoGmail_NoPermiteAutenticacion()
+    {
+        var usuario = new Usuario
+        {
+            Nombre = "Cuenta legacy",
+            Correo = "legacy@example.com",
+            FechaRegistro = DateTime.UtcNow,
+        };
+        usuario.ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>()
+            .HashPassword(usuario, "ClaveSegura123");
+        _db.Usuarios.Add(usuario);
+        await _db.SaveChangesAsync();
+
+        var service = new AuthService(_db, _config);
+        var respuesta = await service.LoginAsync(new LoginRequest("legacy@example.com", "ClaveSegura123"));
+
+        Assert.Null(respuesta);
+        // La política bloquea el acceso pero conserva el registro y sus datos.
+        Assert.True(await _db.Usuarios.AnyAsync(u => u.IdUsuario == usuario.IdUsuario));
     }
 }

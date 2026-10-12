@@ -101,10 +101,10 @@ public class InvitacionesNotificacionesTests : IDisposable
     [Fact]
     public async Task Invitar_CorreoConCuenta_CreaInvitacionYNotificacion()
     {
-        var invitado = await CrearUsuario("ana@demo.com");
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com");
+        var invitado = await CrearUsuario("ana@gmail.com");
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
 
-        var resultado = await controller.Invitar(new InvitarRequest("ana@demo.com"));
+        var resultado = await controller.Invitar(new InvitarRequest("ana@gmail.com"));
 
         var created = Assert.IsType<CreatedAtActionResult>(resultado.Result);
         var invitacion = Assert.IsType<InvitacionFamilia>(created.Value);
@@ -117,11 +117,22 @@ public class InvitacionesNotificacionesTests : IDisposable
     }
 
     [Fact]
+    public async Task Invitar_DominioNoGmail_RetornaBadRequest()
+    {
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
+
+        var resultado = await controller.Invitar(new InvitarRequest("persona@example.org"));
+
+        Assert.IsType<BadRequestObjectResult>(resultado.Result);
+        Assert.Empty(await _db.InvitacionesFamilia.ToListAsync());
+    }
+
+    [Fact]
     public async Task Invitar_CorreoSinCuenta_QuedaPendienteSoloPorCorreo()
     {
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com");
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
 
-        var resultado = await controller.Invitar(new InvitarRequest("nuevo@demo.com"));
+        var resultado = await controller.Invitar(new InvitarRequest("nuevo@gmail.com"));
 
         var created = Assert.IsType<CreatedAtActionResult>(resultado.Result);
         var invitacion = Assert.IsType<InvitacionFamilia>(created.Value);
@@ -132,10 +143,10 @@ public class InvitacionesNotificacionesTests : IDisposable
     [Fact]
     public async Task Invitar_CorreoYaMiembro_RetornaBadRequest()
     {
-        await CrearUsuario("miembro@demo.com", idHogar: 1);
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com");
+        await CrearUsuario("miembro@gmail.com", idHogar: 1);
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
 
-        var resultado = await controller.Invitar(new InvitarRequest("miembro@demo.com"));
+        var resultado = await controller.Invitar(new InvitarRequest("miembro@gmail.com"));
 
         Assert.IsType<BadRequestObjectResult>(resultado.Result);
     }
@@ -147,13 +158,13 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = 1,
             IdInvitador = 1,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         });
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com");
-        var resultado = await controller.Invitar(new InvitarRequest("ana@demo.com"));
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
+        var resultado = await controller.Invitar(new InvitarRequest("ana@gmail.com"));
 
         Assert.IsType<ConflictObjectResult>(resultado.Result);
     }
@@ -161,16 +172,16 @@ public class InvitacionesNotificacionesTests : IDisposable
     [Fact]
     public async Task MisInvitaciones_CasaPorIdOporCorreo()
     {
-        var invitado = await CrearUsuario("ana@demo.com");
+        var invitado = await CrearUsuario("ana@gmail.com");
         await _db.InvitacionesFamilia.AddRangeAsync(
-            new InvitacionFamilia { IdHogar = 1, IdInvitador = 1, IdInvitado = invitado.IdUsuario, Correo = "ana@demo.com", Estado = InvitacionFamilia.EstadoPendiente },
-            new InvitacionFamilia { IdHogar = 2, IdInvitador = 2, Correo = "otro@demo.com", Estado = InvitacionFamilia.EstadoPendiente },
-            new InvitacionFamilia { IdHogar = 3, IdInvitador = 3, Correo = "ana@demo.com", Estado = InvitacionFamilia.EstadoPendiente },
-            new InvitacionFamilia { IdHogar = 4, IdInvitador = 4, Correo = "ana@demo.com", Estado = InvitacionFamilia.EstadoRechazada }
+            new InvitacionFamilia { IdHogar = 1, IdInvitador = 1, IdInvitado = invitado.IdUsuario, Correo = "ana@gmail.com", Estado = InvitacionFamilia.EstadoPendiente },
+            new InvitacionFamilia { IdHogar = 2, IdInvitador = 2, Correo = "otro@gmail.com", Estado = InvitacionFamilia.EstadoPendiente },
+            new InvitacionFamilia { IdHogar = 3, IdInvitador = 3, Correo = "ana@gmail.com", Estado = InvitacionFamilia.EstadoPendiente },
+            new InvitacionFamilia { IdHogar = 4, IdInvitador = 4, Correo = "ana@gmail.com", Estado = InvitacionFamilia.EstadoRechazada }
         );
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@demo.com", rol: "Miembro");
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@gmail.com", rol: "Miembro");
         var resultado = await controller.MisInvitaciones();
 
         var ok = Assert.IsType<OkObjectResult>(resultado.Result);
@@ -184,7 +195,7 @@ public class InvitacionesNotificacionesTests : IDisposable
     [Fact]
     public async Task Aceptar_SinHogarPrevio_SeUneComoMiembroYNotificaAlInvitador()
     {
-        var invitado = await CrearUsuario("ana@demo.com", idHogar: null);
+        var invitado = await CrearUsuario("ana@gmail.com", idHogar: null);
         await _db.Hogares.AddAsync(new Hogar { NombreFamiliar = "Familia Admin" });
         await _db.SaveChangesAsync();
         var hogar = _db.Hogares.Local.First();
@@ -192,13 +203,13 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = hogar.IdHogar,
             IdInvitador = 900,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         };
         _db.InvitacionesFamilia.Add(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@demo.com", rol: "Miembro");
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@gmail.com", rol: "Miembro");
         var resultado = await controller.Aceptar(invitacion.IdInvitacion);
 
         var ok = Assert.IsType<OkObjectResult>(resultado.Result);
@@ -219,18 +230,18 @@ public class InvitacionesNotificacionesTests : IDisposable
     {
         await _db.Hogares.AddAsync(new Hogar { NombreFamiliar = "Otro hogar" });
         await _db.SaveChangesAsync();
-        var invitado = await CrearUsuario("ana@demo.com", idHogar: _db.Hogares.Local.First().IdHogar);
+        var invitado = await CrearUsuario("ana@gmail.com", idHogar: _db.Hogares.Local.First().IdHogar);
         var invitacion = new InvitacionFamilia
         {
             IdHogar = 55,
             IdInvitador = 900,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         };
         _db.InvitacionesFamilia.Add(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: invitado.IdHogar ?? 0, correo: "ana@demo.com");
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: invitado.IdHogar ?? 0, correo: "ana@gmail.com");
         var resultado = await controller.Aceptar(invitacion.IdInvitacion);
 
         Assert.IsType<ConflictObjectResult>(resultado.Result);
@@ -243,13 +254,13 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = 1,
             IdInvitador = 2,
-            Correo = "otrapersona@demo.com",
+            Correo = "otrapersona@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         };
         await _db.InvitacionesFamilia.AddAsync(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, idUsuario: 77, idHogar: 0, correo: "espi@demo.com", rol: "Miembro");
+        var controller = CrearInvitaciones(_db, idUsuario: 77, idHogar: 0, correo: "espi@gmail.com", rol: "Miembro");
         var resultado = await controller.Aceptar(invitacion.IdInvitacion);
 
         Assert.IsType<ForbidResult>(resultado.Result);
@@ -258,19 +269,19 @@ public class InvitacionesNotificacionesTests : IDisposable
     [Fact]
     public async Task Rechazar_MarcaRechazadaYNotificaAlInvitador()
     {
-        var invitado = await CrearUsuario("ana@demo.com");
+        var invitado = await CrearUsuario("ana@gmail.com");
         var invitacion = new InvitacionFamilia
         {
             IdHogar = 1,
             IdInvitador = 900,
             IdInvitado = invitado.IdUsuario,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         };
         _db.InvitacionesFamilia.Add(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@demo.com");
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@gmail.com");
         var resultado = await controller.Rechazar(invitacion.IdInvitacion);
 
         Assert.IsType<NoContentResult>(resultado);
@@ -355,13 +366,13 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = 1,
             IdInvitador = 1,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
         };
         await _db.InvitacionesFamilia.AddAsync(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com", rol: "Admin");
         var resultado = await controller.Cancelar(invitacion.IdInvitacion);
 
         Assert.IsType<NoContentResult>(resultado);
@@ -375,13 +386,13 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = 1,
             IdInvitador = 1,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoAceptada,
         };
         await _db.InvitacionesFamilia.AddAsync(invitacion);
         await _db.SaveChangesAsync();
 
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com", rol: "Admin");
         var resultado = await controller.Cancelar(invitacion.IdInvitacion);
 
         Assert.IsType<NotFoundResult>(resultado);
@@ -394,7 +405,7 @@ public class InvitacionesNotificacionesTests : IDisposable
         {
             IdHogar = 1,
             IdInvitador = 1,
-            Correo = "ana@demo.com",
+            Correo = "ana@gmail.com",
             Estado = InvitacionFamilia.EstadoPendiente,
             FechaEnvio = DateTime.UtcNow.AddDays(-5),
         };
@@ -402,7 +413,7 @@ public class InvitacionesNotificacionesTests : IDisposable
         await _db.SaveChangesAsync();
 
         var fechaAnterior = invitacion.FechaEnvio;
-        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@demo.com", rol: "Admin");
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com", rol: "Admin");
         var resultado = await controller.Reenviar(invitacion.IdInvitacion);
 
         Assert.IsType<NoContentResult>(resultado);

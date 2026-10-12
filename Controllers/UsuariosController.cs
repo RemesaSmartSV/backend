@@ -53,6 +53,9 @@ public class UsuariosController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.Rol) && !EsRolValido(request.Rol))
             return BadRequest(new { message = "El rol debe ser Admin o Miembro." });
 
+        if (!AuthService.EsCorreoGmail(request.Correo))
+            return BadRequest(new { code = "gmail_required", message = "Solo se permiten cuentas con direcciones de correo @gmail.com." });
+
         var idHogar = User.GetIdHogar();
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == request.Correo.ToLower()))
             return Conflict(new { message = "El correo ya está registrado." });

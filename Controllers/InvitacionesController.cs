@@ -78,6 +78,9 @@ public class InvitacionesController : ControllerBase
 
         var correo = (request.Correo ?? string.Empty).Trim().ToLowerInvariant();
 
+        if (!AuthService.EsCorreoGmail(correo))
+            return BadRequest(new { code = "gmail_required", message = "Solo se pueden invitar direcciones @gmail.com." });
+
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == correo && u.IdHogar == idHogar))
             return BadRequest(new { message = "Este usuario ya es miembro del hogar." });
 

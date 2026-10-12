@@ -378,6 +378,10 @@ namespace RemesaSmartSV.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("GoogleSubject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<int?>("IdHogar")
                         .HasColumnType("integer");
 
@@ -414,6 +418,9 @@ namespace RemesaSmartSV.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("IdUsuario");
+
+                    b.HasIndex("GoogleSubject")
+                        .IsUnique();
 
                     b.HasIndex("IdHogar");
 

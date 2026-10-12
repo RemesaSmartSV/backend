@@ -52,6 +52,9 @@ public class AuthService
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
+        if (!EsCorreoGmail(request.Correo))
+            return null;
+
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == request.Correo.ToLower());
         if (usuario is null)
             return null;
