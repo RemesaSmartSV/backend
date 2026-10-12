@@ -58,7 +58,7 @@ public class AuthFlujoTests : IDisposable
         };
     }
 
-    private async Task<Usuario> CrearUsuarioSinHogarAsync(string correo = "ana@example.com")
+    private async Task<Usuario> CrearUsuarioSinHogarAsync(string correo = "ana@gmail.com")
     {
         var usuario = new Usuario
         {
@@ -78,7 +78,7 @@ public class AuthFlujoTests : IDisposable
         var auth = CrearAuthService();
 
         var response = await auth.RegisterAsync(
-            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@example.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
+            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@gmail.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
 
         Assert.NotNull(response);
         var usuario = await _db.Usuarios.SingleAsync();
@@ -98,7 +98,7 @@ public class AuthFlujoTests : IDisposable
     {
         var auth = CrearAuthService();
         await auth.RegisterAsync(
-            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@example.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
+            new RegisterRequest { Nombre = "Ana Rivera", Correo = "ana@gmail.com", Contrasena = "ClaveSegura123", ConfirmarContrasena = "ClaveSegura123" });
 
         // El control de duplicados ignora mayusculas, como hace el servicio.
         var duplicado = await auth.RegisterAsync(
@@ -146,7 +146,7 @@ public class AuthFlujoTests : IDisposable
         {
             IdHogar = hogarExistente.IdHogar,
             Nombre = "Ana",
-            Correo = "ana@example.com",
+            Correo = "ana@gmail.com",
             ContrasenaHash = "hash-de-prueba",
             Rol = "Admin"
         };
@@ -175,7 +175,7 @@ public class AuthFlujoTests : IDisposable
         {
             IdHogar = hogar.IdHogar,
             Nombre = "Ana",
-            Correo = "ana@example.com",
+            Correo = "ana@gmail.com",
             ContrasenaHash = "hash-de-prueba",
             Rol = "Miembro"
         };
@@ -201,7 +201,7 @@ public class AuthFlujoTests : IDisposable
         var request = new RegisterRequest
         {
             Nombre = "Ana Rivera",
-            Correo = "ana@example.com",
+            Correo = "ana@gmail.com",
             Contrasena = "ClaveSegura123",
             ConfirmarContrasena = "ClaveQueNoCoincide"
         };
@@ -221,7 +221,7 @@ public class AuthFlujoTests : IDisposable
         var request = new RegisterRequest
         {
             Nombre = "Ana Rivera",
-            Correo = "ana@example.com",
+            Correo = "ana@gmail.com",
             Contrasena = "ClaveSegura123",
             ConfirmarContrasena = "ClaveSegura123"
         };
@@ -240,7 +240,7 @@ public class AuthFlujoTests : IDisposable
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()).Options;
         await using var db = new ApplicationDbContext(options);
 
-        var admin = new Usuario { Nombre = "Admin", Correo = "admin@test.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
+        var admin = new Usuario { Nombre = "Admin", Correo = "admin@gmail.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 
@@ -264,7 +264,7 @@ public class AuthFlujoTests : IDisposable
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()).Options;
         await using var db = new ApplicationDbContext(options);
 
-        var admin = new Usuario { Nombre = "Admin", Correo = "admin@test.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
+        var admin = new Usuario { Nombre = "Admin", Correo = "admin@gmail.com", ContrasenaHash = "x", IdHogar = 1, Rol = "Admin", FechaRegistro = DateTime.UtcNow };
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 

@@ -121,6 +121,10 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Token de Google inválido." });
         }
 
+        // Política: solo se permiten cuentas @gmail.com.
+        if (!AuthService.EsCorreoGmail(payload.Email))
+            return BadRequest(new { message = "Solo se permiten cuentas con direcciones de correo @gmail.com." });
+
         // Busca usuario por el Google ID estable (no por correo).
         var googleId = payload.Subject;
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == payload.Email.ToLower());

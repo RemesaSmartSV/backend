@@ -21,8 +21,16 @@ public class AuthService
         _config = config;
     }
 
+    /// <summary>Valida que el correo termine en @gmail.com (política del proyecto).</summary>
+    public static bool EsCorreoGmail(string correo)
+        => !string.IsNullOrWhiteSpace(correo)
+           && correo.Trim().EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase);
+
     public async Task<LoginResponse?> RegisterAsync(RegisterRequest request)
     {
+        if (!EsCorreoGmail(request.Correo))
+            return null;
+
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == request.Correo.ToLower()))
             return null;
 
