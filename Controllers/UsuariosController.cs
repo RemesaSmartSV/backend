@@ -247,12 +247,13 @@ public class UsuariosController : ControllerBase
 
     /// <summary>Abandona la familia actual del usuario autenticado.</summary>
     /// <remarks>
-    /// Un miembro normal puede salir libremente. Un Admin solo puede salir si hay otro Admin
-    /// que pueda quedar a cargo (evita dejar la familia sin administración).
-    /// No elimina datos financieros: solo desvincula al usuario del hogar.
+    /// Cualquier miembro puede salirse libremente, incluido el último Admin.
+    /// Si al salir la familia queda sin miembros, se elimina el hogar y con él
+    /// sus datos financieros (movimientos, metas, aportes, presupuestos y
+    /// categorías), porque dependen del hogar con borrado en cascada.
     /// </remarks>
     /// <response code="200">LoginResponse refrescado sin hogar.</response>
-    /// <response code="400">No perteneces a ninguna familia o eres el último Admin.</response>
+    /// <response code="400">No perteneces a ninguna familia.</response>
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost("abandonar-familia")]
@@ -266,18 +267,27 @@ public class UsuariosController : ControllerBase
         if (usuario.IdHogar is null or 0)
             return BadRequest(new { message = "No perteneces a ninguna familia." });
 
-        // Si es Admin, verificar que quede al menos otro Admin.
-        if (usuario.Rol == "Admin")
-        {
-            var otrosAdmins = await _db.Usuarios
-                .CountAsync(u => u.IdHogar == usuario.IdHogar && u.Rol == "Admin" && u.IdUsuario != idUsuario);
-            if (otrosAdmins == 0)
-                return BadRequest(new { message = "Eres el último administrador. Transfiere la administración a otro miembro antes de abandonar la familia." });
-        }
+        var idHogar = usuario.IdHogar.Value;
 
         usuario.IdHogar = null;
         usuario.Rol = null;
         await _db.SaveChangesAsync();
+
+        // Si la familia se quedó sin miembros, deja de existir. El borrado en
+        // cascada de Hogares limpia también movimientos, metas, aportes,
+        // presupuestos, categorías, invitaciones y solicitudes de unión.
+        var quedanMiembros = await _db.Usuarios
+            .AnyAsync(u => u.IdHogar == idHogar && u.IdUsuario != idUsuario);
+
+        if (!quedanMiembros)
+        {
+            var hogar = await _db.Hogares.FindAsync(idHogar);
+            if (hogar is not null)
+            {
+                _db.Hogares.Remove(hogar);
+                await _db.SaveChangesAsync();
+            }
+        }
 
         return Ok(_authService.BuildLoginResponse(usuario));
     }
