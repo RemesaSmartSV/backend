@@ -17,6 +17,9 @@ public class AporteMeta
 
     public int? IdUsuario { get; set; }
 
+    /// <summary>Clave opcional de idempotencia para evitar duplicados por reintentos HTTP.</summary>
+    public Guid? IdempotencyKey { get; set; }
+
     [Required]
     [Column(TypeName = "decimal(10, 2)")]
     [Range(typeof(decimal), "0.01", "99999999.99")]

@@ -185,19 +185,72 @@ public class AuthFlujoTests : IDisposable
         var controller = new UsuariosController(_db, new AuthService(_db, _config));
         AsignarClaims(controller, usuario.IdUsuario, hogar.IdHogar);
 
-        var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest { Nombre = "Ana Rivera" });
+        var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest
+        {
+            Nombre = "Ana Rivera",
+            IdiomaPreferido = "en"
+        });
 
         Assert.IsType<NoContentResult>(result);
         var actualizado = await _db.Usuarios.SingleAsync();
         Assert.Equal("Ana Rivera", actualizado.Nombre);
+        Assert.Equal("en", actualizado.IdiomaPreferido);
         // El punto del endpoint: auto-servicio que no puede tocar rol ni hogar.
         Assert.Equal("Miembro", actualizado.Rol);
         Assert.Equal(hogar.IdHogar, actualizado.IdHogar);
     }
 
     [Fact]
+    public async Task BuildLoginResponse_IncluyeIdiomaPreferidoPersistido()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        usuario.IdiomaPreferido = "en";
+
+        var respuesta = CrearAuthService().BuildLoginResponse(usuario);
+
+        Assert.Equal("en", respuesta.IdiomaPreferido);
+    }
+
+    [Fact]
+    public async Task UsuariosController_ActualizarIdioma_PersisteIdiomaSoportado()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var controller = new UsuariosController(_db, CrearAuthService());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var result = await controller.ActualizarIdioma(new ActualizarIdiomaRequest { IdiomaPreferido = "EN" });
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal("en", (await _db.Usuarios.SingleAsync()).IdiomaPreferido);
+    }
+
+    [Fact]
+    public async Task UsuariosController_ActualizarIdioma_RechazaIdiomaNoSoportado()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var controller = new UsuariosController(_db, CrearAuthService());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var result = await controller.ActualizarIdioma(new ActualizarIdiomaRequest { IdiomaPreferido = "fr" });
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Null((await _db.Usuarios.SingleAsync()).IdiomaPreferido);
+    }
+
+    [Fact]
     public async Task UsuariosController_AddMember_DominioNoGmail_RechazaSinCrearCuenta()
     {
+        _db.Usuarios.Add(new Usuario
+        {
+            IdUsuario = 1,
+            IdHogar = 7,
+            Nombre = "Admin",
+            Correo = "admin@gmail.com",
+            ContrasenaHash = "hash",
+            Rol = "Admin",
+            FechaRegistro = DateTime.UtcNow,
+        });
+        await _db.SaveChangesAsync();
         var controller = new UsuariosController(_db, CrearAuthService());
         AsignarClaims(controller, idUsuario: 1, idHogarClaim: 7);
 
@@ -205,7 +258,8 @@ public class AuthFlujoTests : IDisposable
             new AddMemberRequest("Legacy", "legacy@example.org", "ClaveSegura123", "Miembro"));
 
         Assert.IsType<BadRequestObjectResult>(resultado.Result);
-        Assert.Empty(await _db.Usuarios.ToListAsync());
+        Assert.Single(await _db.Usuarios.ToListAsync());
+        Assert.False(await _db.Usuarios.AnyAsync(u => u.Correo == "legacy@example.org"));
     }
 
     [Fact]
@@ -247,7 +301,7 @@ public class AuthFlujoTests : IDisposable
     }
 
     [Fact]
-    public async Task Delete_UltimoAdmin_RetornaBadRequest()
+    public async Task Delete_AdminActual_NoPuedeEliminarseASiMismo()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()).Options;
@@ -258,7 +312,7 @@ public class AuthFlujoTests : IDisposable
         await db.SaveChangesAsync();
 
         var controller = new UsuariosController(db, new AuthService(db, _config));
-        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
+        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", admin.IdUsuario.ToString()), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "Test")) },
@@ -267,7 +321,7 @@ public class AuthFlujoTests : IDisposable
         var result = await controller.Delete(admin.IdUsuario);
 
         var badRequest = Assert.IsType<Microsoft.AspNetCore.Mvc.BadRequestObjectResult>(result);
-        Assert.Contains("último administrador", badRequest.Value?.ToString());
+        Assert.Contains("propio usuario", badRequest.Value?.ToString());
     }
 
     [Fact]
@@ -282,7 +336,7 @@ public class AuthFlujoTests : IDisposable
         await db.SaveChangesAsync();
 
         var controller = new UsuariosController(db, new AuthService(db, _config));
-        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", "999"), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
+        var claims = new List<System.Security.Claims.Claim> { new("idUsuario", admin.IdUsuario.ToString()), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
             HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext { User = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(claims, "Test")) },

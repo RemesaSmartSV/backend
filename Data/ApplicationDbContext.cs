@@ -18,6 +18,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<AporteMeta> Aportes { get; set; }
     public DbSet<EducacionFinanciera> TipsFinancieros { get; set; }
     public DbSet<InvitacionFamilia> InvitacionesFamilia { get; set; }
+    public DbSet<SolicitudUnion> SolicitudesUnion { get; set; }
     public DbSet<Notificacion> Notificaciones { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -35,6 +36,10 @@ public class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Usuario>()
             .HasIndex(u => u.GoogleSubject)
+            .IsUnique();
+
+        modelBuilder.Entity<Hogar>()
+            .HasIndex(h => h.CodigoPublico)
             .IsUnique();
 
         modelBuilder.Entity<AporteMeta>()
@@ -68,8 +73,35 @@ public class ApplicationDbContext : DbContext
             .HasIndex(i => new { i.IdHogar, i.Correo })
             .IsUnique();
 
+        modelBuilder.Entity<SolicitudUnion>()
+            .HasOne(s => s.Hogar)
+            .WithMany()
+            .HasForeignKey(s => s.IdHogar)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SolicitudUnion>()
+            .HasOne(s => s.Usuario)
+            .WithMany()
+            .HasForeignKey(s => s.IdUsuario)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SolicitudUnion>()
+            .HasOne<Usuario>()
+            .WithMany()
+            .HasForeignKey(s => s.IdAdminRespuesta)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<SolicitudUnion>()
+            .HasIndex(s => new { s.IdHogar, s.IdUsuario })
+            .IsUnique()
+            .HasFilter("\"Estado\" = 'Pendiente'");
+
         modelBuilder.Entity<Notificacion>()
             .HasIndex(n => new { n.IdUsuario, n.Leida });
+
+        modelBuilder.Entity<AporteMeta>()
+            .HasIndex(a => a.IdempotencyKey)
+            .IsUnique();
 
     }
 }

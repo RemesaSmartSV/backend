@@ -77,7 +77,8 @@ public class AuthService
         Nombre: usuario.Nombre,
         Correo: usuario.Correo,
         Rol: usuario.Rol,
-        IdHogar: usuario.IdHogar);
+        IdHogar: usuario.IdHogar,
+        IdiomaPreferido: usuario.IdiomaPreferido);
 
     private string GenerateToken(Usuario usuario)
     {

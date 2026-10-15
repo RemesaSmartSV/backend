@@ -21,7 +21,7 @@ public class SmtpEmailService : IEmailService
 
         if (string.IsNullOrWhiteSpace(smtpUser) || string.IsNullOrWhiteSpace(smtpPass))
         {
-            _logger.LogWarning("SMTP no configurado (SMTP_USER/SMTP_PASS). Correo NO enviado a {Destino}.", destino);
+            _logger.LogWarning("SMTP no configurado (SMTP_USER/SMTP_PASS). Correo no enviado.");
             return false;
         }
 
@@ -44,12 +44,14 @@ public class SmtpEmailService : IEmailService
             mensaje.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(cuerpoTexto, null, "text/plain"));
 
             await cliente.SendMailAsync(mensaje);
-            _logger.LogInformation("Correo enviado a {Destino}: {Asunto}", destino, asunto);
+            _logger.LogInformation("Correo enviado correctamente.");
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error al enviar correo a {Destino}", destino);
+            // No registrar destinatario, asunto, cuerpo ni excepción SMTP: pueden
+            // contener PII, enlaces con tokens o detalles del proveedor.
+            _logger.LogError("Error al enviar correo. Tipo de excepción: {ExceptionType}", ex.GetType().Name);
             return false;
         }
     }

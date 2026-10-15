@@ -25,16 +25,23 @@ public class UsuariosController : ControllerBase
 
     /// <summary>Obtiene los miembros del hogar del usuario actual.</summary>
     /// <response code="200">Devuelve la lista de miembros del hogar.</response>
-    [ProducesResponseType(typeof(IEnumerable<Usuario>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<MiembroFamiliaDto>), StatusCodes.Status200OK)]
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Usuario>>> GetMiembros()
+    public async Task<ActionResult<IEnumerable<MiembroFamiliaDto>>> GetMiembros()
     {
-        var idHogar = User.GetIdHogar();
-        return Ok(await _db.Usuarios
+        var actual = await UsuarioActualAsync();
+        if (actual?.IdHogar is null)
+            return Forbid();
+
+        var miembros = await _db.Usuarios
             .AsNoTracking()
-            .Where(u => u.IdHogar == idHogar)
+            .Where(u => u.IdHogar == actual.IdHogar.Value)
             .OrderBy(u => u.Nombre)
-            .ToListAsync());
+            .Select(u => new MiembroFamiliaDto(
+                u.IdUsuario, u.Nombre, u.Apellido, u.NombreVisible,
+                u.Correo, u.FotoPerfil, u.Rol, u.FechaRegistro))
+            .ToListAsync();
+        return Ok(miembros);
     }
 
     /// <summary>Agrega un miembro al hogar actual.</summary>
@@ -43,20 +50,24 @@ public class UsuariosController : ControllerBase
     /// <response code="201">El miembro fue agregado.</response>
     /// <response code="400">El rol indicado no es válido.</response>
     /// <response code="409">El correo ya está registrado.</response>
-    [ProducesResponseType(typeof(Usuario), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(MiembroFamiliaDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPost]
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<Usuario>> AddMember([FromBody] AddMemberRequest request)
     {
+        var admin = await UsuarioActualAsync();
+        if (admin?.Rol != "Admin" || admin.IdHogar is null)
+            return Forbid();
+
         if (!string.IsNullOrWhiteSpace(request.Rol) && !EsRolValido(request.Rol))
             return BadRequest(new { message = "El rol debe ser Admin o Miembro." });
 
         if (!AuthService.EsCorreoGmail(request.Correo))
             return BadRequest(new { code = "gmail_required", message = "Solo se permiten cuentas con direcciones de correo @gmail.com." });
 
-        var idHogar = User.GetIdHogar();
+        var idHogar = admin.IdHogar.Value;
         if (await _db.Usuarios.AnyAsync(u => u.Correo.ToLower() == request.Correo.ToLower()))
             return Conflict(new { message = "El correo ya está registrado." });
 
@@ -72,7 +83,9 @@ public class UsuariosController : ControllerBase
 
         _db.Usuarios.Add(usuario);
         await _db.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetMiembros), new { id = usuario.IdUsuario }, usuario);
+        var response = new MiembroFamiliaDto(usuario.IdUsuario, usuario.Nombre, usuario.Apellido,
+            usuario.NombreVisible, usuario.Correo, usuario.FotoPerfil, usuario.Rol, usuario.FechaRegistro);
+        return CreatedAtAction(nameof(GetMiembros), new { id = usuario.IdUsuario }, response);
     }
 
     /// <summary>Actualiza solo el nombre del usuario autenticado (auto-servicio).</summary>
@@ -103,6 +116,27 @@ public class UsuariosController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Actualiza solo la preferencia de idioma del usuario autenticado.</summary>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpPut("idioma")]
+    [Authorize]
+    public async Task<IActionResult> ActualizarIdioma([FromBody] ActualizarIdiomaRequest request)
+    {
+        var idioma = request.IdiomaPreferido.Trim().ToLowerInvariant();
+        if (idioma is not ("es" or "en"))
+            return BadRequest(new { message = "El idioma debe ser es o en." });
+
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        usuario.IdiomaPreferido = idioma;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Actualiza el nombre o el rol de un miembro del hogar.</summary>
     /// <remarks>Ejemplo de cuerpo: <c>{"nombre": "Ana Rivera", "rol": "Admin"}</c></remarks>
     /// <param name="id">Identificador del miembro.</param>
@@ -117,10 +151,14 @@ public class UsuariosController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUsuarioRequest request)
     {
+        var admin = await UsuarioActualAsync();
+        if (admin?.Rol != "Admin" || admin.IdHogar is null)
+            return Forbid();
+
         if (!string.IsNullOrWhiteSpace(request.Rol) && !EsRolValido(request.Rol))
             return BadRequest(new { message = "El rol debe ser Admin o Miembro." });
 
-        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == User.GetIdHogar());
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == admin.IdHogar);
         if (usuario is null)
             return NotFound();
 
@@ -159,7 +197,11 @@ public class UsuariosController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
-        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == User.GetIdHogar());
+        var admin = await UsuarioActualAsync();
+        if (admin?.Rol != "Admin" || admin.IdHogar is null)
+            return Forbid();
+
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == id && u.IdHogar == admin.IdHogar);
         if (usuario is null)
             return NotFound();
         if (usuario.IdUsuario == User.GetIdUsuario())
@@ -239,4 +281,7 @@ public class UsuariosController : ControllerBase
 
         return Ok(_authService.BuildLoginResponse(usuario));
     }
+
+    private Task<Usuario?> UsuarioActualAsync()
+        => _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
 }

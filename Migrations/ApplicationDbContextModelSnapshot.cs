@@ -42,6 +42,9 @@ namespace RemesaSmartSV.Migrations
                     b.Property<int?>("IdUsuario")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("IdempotencyKey")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("Monto")
                         .HasColumnType("decimal(10, 2)");
 
@@ -56,6 +59,9 @@ namespace RemesaSmartSV.Migrations
                     b.HasIndex("IdMeta");
 
                     b.HasIndex("IdUsuario");
+
+                    b.HasIndex("IdempotencyKey")
+                        .IsUnique();
 
                     b.ToTable("Aportes");
                 });
@@ -130,6 +136,11 @@ namespace RemesaSmartSV.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdHogar"));
 
+                    b.Property<string>("CodigoPublico")
+                        .IsRequired()
+                        .HasMaxLength(23)
+                        .HasColumnType("character varying(23)");
+
                     b.Property<DateTime>("FechaCreacion")
                         .HasColumnType("timestamp with time zone");
 
@@ -139,6 +150,9 @@ namespace RemesaSmartSV.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.HasKey("IdHogar");
+
+                    b.HasIndex("CodigoPublico")
+                        .IsUnique();
 
                     b.ToTable("Hogares");
                 });
@@ -347,6 +361,47 @@ namespace RemesaSmartSV.Migrations
                     b.HasIndex("IdHogar");
 
                     b.ToTable("Presupuestos");
+                });
+
+            modelBuilder.Entity("RemesaSmartSV.Entities.SolicitudUnion", b =>
+                {
+                    b.Property<int>("IdSolicitud")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdSolicitud"));
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("FechaRespuesta")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("FechaSolicitud")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("IdAdminRespuesta")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdHogar")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("IdUsuario")
+                        .HasColumnType("integer");
+
+                    b.HasKey("IdSolicitud");
+
+                    b.HasIndex("IdAdminRespuesta");
+
+                    b.HasIndex("IdUsuario");
+
+                    b.HasIndex("IdHogar", "IdUsuario")
+                        .IsUnique()
+                        .HasFilter("\"Estado\" = 'Pendiente'");
+
+                    b.ToTable("SolicitudesUnion");
                 });
 
             modelBuilder.Entity("RemesaSmartSV.Entities.Usuario", b =>
@@ -573,6 +628,30 @@ namespace RemesaSmartSV.Migrations
                     b.Navigation("Categoria");
 
                     b.Navigation("Hogar");
+                });
+
+            modelBuilder.Entity("RemesaSmartSV.Entities.SolicitudUnion", b =>
+                {
+                    b.HasOne("RemesaSmartSV.Entities.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("IdAdminRespuesta")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
+                        .WithMany()
+                        .HasForeignKey("IdHogar")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RemesaSmartSV.Entities.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Hogar");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("RemesaSmartSV.Entities.Usuario", b =>

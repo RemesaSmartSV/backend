@@ -7,6 +7,7 @@ namespace RemesaSmartSV.Entities;
 public class Notificacion
 {
     public const string TipoInvitacion = "Invitacion";
+    public const string TipoSolicitudUnion = "SolicitudUnion";
     public const string TipoAlerta = "Alerta";
     public const string TipoSistema = "Sistema";
 

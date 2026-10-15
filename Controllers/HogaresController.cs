@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
@@ -41,10 +43,27 @@ public class HogaresController : ControllerBase
         var usuario = await _db.Usuarios.FindAsync(User.GetIdUsuario());
         if (usuario is null)
             return NotFound();
+        // No confiar solo en el claim: puede estar obsoleto tras aceptar una solicitud.
+        if (usuario.IdHogar is > 0)
+            return Conflict(new { message = "Ya pertenecés a un hogar." });
 
         var hogar = new Hogar { NombreFamiliar = request.NombreFamiliar };
-        _db.Hogares.Add(hogar);
-        await _db.SaveChangesAsync();
+        var creado = false;
+        for (var intento = 0; intento < 5 && !creado; intento++)
+        {
+            hogar.CodigoPublico = CodigoHogar.Generar();
+            _db.Hogares.Add(hogar);
+            try
+            {
+                await _db.SaveChangesAsync();
+                creado = true;
+            }
+            catch (DbUpdateException ex) when (EsColisionCodigo(ex))
+            {
+                _db.Entry(hogar).State = EntityState.Detached;
+                if (intento == 4) throw;
+            }
+        }
 
         // Cambio 7: todo hogar nace con las categorías del sistema.
         await CategoriasSistema.SeedAsync(_db, hogar.IdHogar);
@@ -56,6 +75,23 @@ public class HogaresController : ControllerBase
         // Se devuelve un LoginResponse refrescado: el token del request trae idHogar=0,
         // así que hace falta emitir un token nuevo que incluya el hogar y el rol.
         return Ok(_authService.BuildLoginResponse(usuario));
+    }
+
+    /// <summary>Busca una familia por su código público compartible; no concede acceso ni revela miembros.</summary>
+    [HttpGet("buscar")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<HogarBusquedaDto>> BuscarPorCodigo([FromQuery] string codigo)
+    {
+        if (!CodigoHogar.EsValido(codigo))
+            return BadRequest(new { message = "El código de familia no tiene un formato válido." });
+
+        var normalizado = CodigoHogar.Normalizar(codigo);
+        var hogar = await _db.Hogares.AsNoTracking()
+            .Where(h => h.CodigoPublico == normalizado)
+            .Select(h => new HogarBusquedaDto(h.CodigoPublico, h.NombreFamiliar))
+            .FirstOrDefaultAsync();
+
+        return hogar is null ? NotFound(new { message = "No se encontró una familia con ese código." }) : Ok(hogar);
     }
 
     /// <summary>Obtiene el hogar asociado al usuario actual.</summary>
@@ -108,4 +144,9 @@ public class HogaresController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    private static bool EsColisionCodigo(DbUpdateException exception)
+        => exception.InnerException is PostgresException postgres
+           && postgres.SqlState == PostgresErrorCodes.UniqueViolation
+           && postgres.ConstraintName == "IX_Hogares_CodigoPublico";
 }

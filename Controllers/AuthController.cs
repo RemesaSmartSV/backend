@@ -2,6 +2,7 @@ using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
@@ -66,6 +67,17 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Emite un JWT actualizado a partir de la membresía real del usuario.</summary>
+    [HttpPost("refrescar-sesion")]
+    [Authorize]
+    public async Task<ActionResult<LoginResponse>> RefrescarSesion()
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return Unauthorized();
+        return Ok(_auth.BuildLoginResponse(usuario));
+    }
+
     /// <summary>Solicita un restablecimiento de contraseña. Responde siempre con mensaje genérico.</summary>
     [HttpPost("solicitar-reset")]
     [AllowAnonymous]
@@ -74,8 +86,9 @@ public class AuthController : ControllerBase
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.Correo.ToLower() == request.Correo.ToLower());
         if (usuario is not null)
         {
-            var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-            usuario.ResetToken = token;
+            var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+            // Solo se almacena el hash del bearer token; el valor original se entrega una vez por email.
+            usuario.ResetToken = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
             usuario.ResetTokenExpiry = DateTime.UtcNow.AddHours(1);
             await _db.SaveChangesAsync();
 
@@ -91,8 +104,9 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ResetPassword([FromBody] ResetContrasenaRequest request)
     {
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.Token)));
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u =>
-            u.ResetToken == request.Token && u.ResetTokenExpiry > DateTime.UtcNow);
+            u.ResetToken == tokenHash && u.ResetTokenExpiry > DateTime.UtcNow);
 
         if (usuario is null)
             return BadRequest(new { message = "El enlace de restablecimiento no es válido o expiró." });

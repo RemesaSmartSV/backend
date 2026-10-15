@@ -34,8 +34,10 @@ public class Usuario
     public string? TemaPreferido { get; set; }
 
     [StringLength(100)]
+    [JsonIgnore]
     public string? ResetToken { get; set; }
 
+    [JsonIgnore]
     public DateTime? ResetTokenExpiry { get; set; }
 
     [Required]
@@ -46,6 +48,7 @@ public class Usuario
     // Identidad estable del proveedor externo (Google sub). Nullable para conservar
     // las cuentas locales existentes; el índice único permite múltiples NULL en PostgreSQL.
     [StringLength(255)]
+    [JsonIgnore]
     public string? GoogleSubject { get; set; }
 
     [Required]

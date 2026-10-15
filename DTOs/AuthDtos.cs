@@ -33,7 +33,8 @@ public record LoginResponse(
     string Nombre,
     string Correo,
     string? Rol,
-    int? IdHogar);
+    int? IdHogar,
+    string? IdiomaPreferido);
 
 public record AddMemberRequest(
     [Required] string Nombre,
@@ -65,6 +66,12 @@ public class ActualizarPerfilRequest
 
     [StringLength(20)]
     public string? TemaPreferido { get; set; }
+}
+
+public class ActualizarIdiomaRequest
+{
+    [Required, StringLength(10)]
+    public string IdiomaPreferido { get; set; } = null!;
 }
 
 public record UpdateHogarRequest([Required] string NombreFamiliar);

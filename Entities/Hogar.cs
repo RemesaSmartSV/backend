@@ -13,6 +13,10 @@ public class Hogar
     public string NombreFamiliar { get; set; } = null!;
 
     [Required]
+    [StringLength(23)]
+    public string CodigoPublico { get; set; } = CodigoHogar.Generar();
+
+    [Required]
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
     [JsonIgnore]
