@@ -30,6 +30,7 @@ public class MovimientosController : ControllerBase
     /// <param name="tipo">Filtra por tipo de movimiento cuando se especifica.</param>
     /// <param name="fechaInicio">Filtra los movimientos desde esta fecha inclusive.</param>
     /// <param name="fechaFin">Filtra los movimientos hasta esta fecha inclusive.</param>
+    /// <param name="usuarioId">Filtra por identificador del miembro que registró el movimiento cuando se especifica.</param>
     /// <param name="page">Número de página que se consultará.</param>
     /// <param name="pageSize">Cantidad de movimientos por página, entre 1 y 100.</param>
     /// <response code="200">Devuelve la página de movimientos que coincide con los filtros.</response>
@@ -42,6 +43,7 @@ public class MovimientosController : ControllerBase
         [FromQuery] string? tipo,
         [FromQuery] DateTime? fechaInicio,
         [FromQuery] DateTime? fechaFin,
+        [FromQuery] int? usuarioId,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10)
     {
@@ -59,6 +61,8 @@ public class MovimientosController : ControllerBase
             query = query.Where(m => m.Fecha >= fechaInicio.Value);
         if (fechaFin.HasValue)
             query = query.Where(m => m.Fecha <= fechaFin.Value);
+        if (usuarioId.HasValue)
+            query = query.Where(m => m.IdUsuario == usuarioId.Value);
 
         var total = await query.CountAsync();
         var items = await query
