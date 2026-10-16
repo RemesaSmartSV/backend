@@ -31,12 +31,10 @@ appsettings.Development.json
 ## User secrets (nunca deben subirse)
 secrets.json
 
-<<<<<<< HEAD
 ## Database backups
 scripts/backup_*.sql
-=======
+
 ## Variables de entorno locales
 .env
 .env.*
 !.env.example
->>>>>>> archivo/seguridad-credenciales

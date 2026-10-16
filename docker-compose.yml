@@ -52,7 +52,6 @@ services:
       postgres_db:
         condition: service_healthy
     environment:
-<<<<<<< HEAD
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Development}
       - UseHttpsRedirection=false
       - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
@@ -69,11 +68,6 @@ services:
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - APP_URL=${APP_URL:-http://localhost:5173}
-=======
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: "Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}"
-      Jwt__Key: ${JWT_KEY}
->>>>>>> archivo/seguridad-credenciales
     ports:
       - "8080:8080"
     networks:
