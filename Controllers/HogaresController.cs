@@ -94,6 +94,43 @@ public class HogaresController : ControllerBase
         return hogar is null ? NotFound(new { message = "No se encontró una familia con ese código." }) : Ok(hogar);
     }
 
+    /// <summary>Busca familias por nombre (parcial), sin distinguir mayúsculas ni acentos.</summary>
+    /// <remarks>La comparación es por subcadena sobre el nombre familiar. Devuelve solo identificador
+    /// y nombre; nunca el código público, requisito de privacidad: la búsqueda por nombre solo permite
+    /// solicitar unión (que un Admin aprueba), no unirse directamente.</remarks>
+    /// <param name="q">Texto de búsqueda; requerido, con al menos 3 caracteres.</param>
+    /// <response code="200">Devuelve hasta 10 coincidencias ordenadas por relevancia (empieza-con antes que contiene, luego alfabético). Sin coincidencias devuelve lista vacía.</response>
+    /// <response code="400">El texto de búsqueda falta o tiene menos de 3 caracteres.</response>
+    [ProducesResponseType(typeof(IEnumerable<HogarResultadoBusquedaDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [HttpGet("buscar-por-nombre")]
+    [EnableRateLimiting("auth")]
+    public async Task<ActionResult<IEnumerable<HogarResultadoBusquedaDto>>> BuscarPorNombre([FromQuery] string? q)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 3)
+            return BadRequest(new { message = "La búsqueda debe tener al menos 3 caracteres." });
+
+        // Mismo plegado que CategoriasSistema.Normalizar: minúsculas y sin acentos (áéíóúü).
+        // La cadena ToLower + Replace va inline (y repetida en el OrderBy) porque EF necesita
+        // verla en el árbol de expresiones para traducirla a LOWER/REPLACE en SQL.
+        var consulta = CategoriasSistema.Normalizar(q);
+        var resultados = await _db.Hogares.AsNoTracking()
+            .Where(h => h.NombreFamiliar.ToLower()
+                .Replace("á", "a").Replace("é", "e").Replace("í", "i")
+                .Replace("ó", "o").Replace("ú", "u").Replace("ü", "u")
+                .Contains(consulta))
+            .OrderBy(h => h.NombreFamiliar.ToLower()
+                .Replace("á", "a").Replace("é", "e").Replace("í", "i")
+                .Replace("ó", "o").Replace("ú", "u").Replace("ü", "u")
+                .StartsWith(consulta) ? 0 : 1)
+            .ThenBy(h => h.NombreFamiliar)
+            .Select(h => new HogarResultadoBusquedaDto(h.IdHogar, h.NombreFamiliar))
+            .Take(10)
+            .ToListAsync();
+
+        return Ok(resultados);
+    }
+
     /// <summary>Obtiene el hogar asociado al usuario actual.</summary>
     /// <response code="200">Devuelve el hogar del usuario.</response>
     /// <response code="404">No se encontró el hogar.</response>

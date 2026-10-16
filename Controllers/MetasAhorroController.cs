@@ -70,12 +70,19 @@ public class MetasAhorroController : ControllerBase
     /// <remarks>Ejemplo de cuerpo: <c>{"titulo": "Fondo de emergencia", "montoObjetivo": 1000.00, "montoActual": 0, "fechaLimite": "2027-06-30T00:00:00Z", "estado": "En progreso"}</c></remarks>
     /// <param name="meta">Datos de la meta de ahorro que se creará.</param>
     /// <response code="201">La meta de ahorro fue creada.</response>
+    /// <response code="400">El usuario no tiene una familia vigente.</response>
     [ProducesResponseType(typeof(MetaAhorro), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpPost]
     public async Task<ActionResult<MetaAhorro>> Create([FromBody] MetaAhorro meta)
     {
+        // La FK hacia Hogares es NOT NULL: sin hogar vigente el SaveChanges revienta en 500.
+        var idHogar = await HogarVigenteAsync();
+        if (idHogar is not > 0)
+            return BadRequest(new { message = "Necesitás crear o unirte a una familia antes de registrar una meta de ahorro." });
+
         meta.IdMeta = 0;
-        meta.IdHogar = User.GetIdHogar();
+        meta.IdHogar = idHogar.Value;
         meta.MontoActual = 0;
         meta.Estado = "En progreso";
         _db.MetasAhorro.Add(meta);
@@ -131,4 +138,13 @@ public class MetasAhorroController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Hogar vigente del usuario en la base; null si no tiene familia.</summary>
+    private async Task<int?> HogarVigenteAsync()
+        // Usa la membresía vigente en la base, no un claim IdHogar que podría estar obsoleto
+        // (p. ej. tras abandonar la familia, el token viejo sigue trayendo el id viejo).
+        => await _db.Usuarios.AsNoTracking()
+            .Where(u => u.IdUsuario == User.GetIdUsuario())
+            .Select(u => u.IdHogar)
+            .FirstOrDefaultAsync();
 }

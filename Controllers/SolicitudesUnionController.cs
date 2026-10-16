@@ -20,7 +20,18 @@ public class SolicitudesUnionController : ControllerBase
 
     public SolicitudesUnionController(ApplicationDbContext db) => _db = db;
 
-    /// <summary>Envía una solicitud para unirse a una familia encontrada por su código público.</summary>
+    /// <summary>Envía una solicitud para unirse a una familia, identificada por su código público o por su id.</summary>
+    /// <remarks>El cuerpo debe traer exactamente uno de los dos campos: <c>codigoPublico</c> (flujo de código)
+    /// o <c>idHogar</c> (flujo de búsqueda por nombre, que no expone el código público).</remarks>
+    /// <param name="request">Código público o identificador de la familia; exactamente uno de los dos.</param>
+    /// <response code="201">La solicitud fue creada y queda pendiente de aprobación del Admin.</response>
+    /// <response code="400">Vinieron ambos campos, ninguno, o el código no tiene formato válido.</response>
+    /// <response code="404">No existe una familia con ese código o con ese identificador.</response>
+    /// <response code="409">Ya pertenece a una familia, ya hay solicitud pendiente o la familia no tiene Admin activo.</response>
+    [ProducesResponseType(typeof(SolicitudUnionPropiaDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPost]
     public async Task<ActionResult<SolicitudUnionPropiaDto>> Crear([FromBody] CrearSolicitudUnionRequest request)
     {
@@ -30,13 +41,32 @@ public class SolicitudesUnionController : ControllerBase
         if (solicitante.IdHogar is > 0)
             return Conflict(new { message = "Ya perteneces a una familia. Abandónala antes de solicitar otra." });
 
-        if (!CodigoHogar.EsValido(request.CodigoPublico))
-            return BadRequest(new { message = "El código de familia no tiene un formato válido." });
+        var tieneCodigo = !string.IsNullOrWhiteSpace(request.CodigoPublico);
+        var tieneId = request.IdHogar is > 0;
+        if (tieneCodigo && tieneId)
+            return BadRequest(new { message = "Indica solo un campo: codigoPublico o idHogar, no ambos." });
+        if (!tieneCodigo && !tieneId)
+            return BadRequest(new { message = "Debes indicar codigoPublico o idHogar para elegir la familia." });
 
-        var codigo = CodigoHogar.Normalizar(request.CodigoPublico);
-        var hogar = await _db.Hogares.AsNoTracking().FirstOrDefaultAsync(h => h.CodigoPublico == codigo);
-        if (hogar is null)
-            return NotFound(new { message = "No se encontró una familia con ese código." });
+        Hogar? hogar;
+        if (tieneId)
+        {
+            // Caso búsqueda por nombre: el resultado no trae el código, solo el id.
+            hogar = await _db.Hogares.AsNoTracking()
+                .FirstOrDefaultAsync(h => h.IdHogar == request.IdHogar);
+            if (hogar is null)
+                return NotFound(new { message = "No se encontró una familia con ese identificador." });
+        }
+        else
+        {
+            if (!CodigoHogar.EsValido(request.CodigoPublico!))
+                return BadRequest(new { message = "El código de familia no tiene un formato válido." });
+
+            var codigo = CodigoHogar.Normalizar(request.CodigoPublico!);
+            hogar = await _db.Hogares.AsNoTracking().FirstOrDefaultAsync(h => h.CodigoPublico == codigo);
+            if (hogar is null)
+                return NotFound(new { message = "No se encontró una familia con ese código." });
+        }
 
         var pendiente = await _db.SolicitudesUnion.AnyAsync(s =>
             s.IdHogar == hogar.IdHogar && s.IdUsuario == solicitante.IdUsuario && s.Estado == SolicitudUnion.Pendiente);

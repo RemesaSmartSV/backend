@@ -24,6 +24,20 @@ public class MetasAhorroControllerTests : IDisposable
         _db = new ApplicationDbContext(options);
         _controller = new MetasAhorroController(_db);
 
+        // El Create valida la membresía vigente en la base antes de escribir
+        // (antes bastaba el claim y eso terminaba en 500 por la FK NOT NULL).
+        _db.Usuarios.Add(new Usuario
+        {
+            IdUsuario = 1,
+            IdHogar = 1,
+            Nombre = "Test",
+            Correo = "test@test.com",
+            ContrasenaHash = "x",
+            Rol = "Miembro",
+            FechaRegistro = DateTime.UtcNow
+        });
+        _db.SaveChanges();
+
         var claims = new List<Claim>
         {
             new("idUsuario", "1"),
