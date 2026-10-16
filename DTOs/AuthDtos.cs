@@ -77,7 +77,16 @@ public class ActualizarIdiomaRequest
 public record UpdateHogarRequest([Required] string NombreFamiliar);
 
 public record UpdateUsuarioRequest(string? Nombre, string? Rol);
-public record ResumenDashboardDTO(decimal TotalIngresos, decimal TotalGastos, decimal Balance);
+/// <summary>
+/// Resumen del tablero. TotalAhorro viene de los aportes (AporteMeta), no de los
+/// movimientos, así que es correcto también para los aportes anteriores a la
+/// feature de ahorro-en-dashboard. Balance = Ingresos - Gastos - Ahorro.
+/// </summary>
+public record ResumenDashboardDTO(
+    decimal TotalIngresos,
+    decimal TotalGastos,
+    decimal TotalAhorro,
+    decimal Balance);
 // Cuerpo de POST api/Invitaciones: correo del destinatario a invitar.
 public record InvitarRequest(
     [Required, EmailAddress] string Correo);

@@ -28,7 +28,7 @@ public class Movimiento
 
     [Required]
     [StringLength(20)]
-    [AllowedValues("Ingreso", "Gasto")]
+    [AllowedValues("Ingreso", "Gasto", "Ahorro")]
     public string Tipo { get; set; } = null!;
 
     [StringLength(255)]

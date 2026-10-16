@@ -172,7 +172,7 @@ public class MovimientosController : ControllerBase
     public async Task<ActionResult<Movimiento>> Create([FromBody] Movimiento movimiento)
     {
         if (!EsTipoMovimientoValido(movimiento.Tipo))
-            return BadRequest(new { message = "El tipo debe ser Ingreso o Gasto." });
+            return BadRequest(new { message = "El tipo debe ser Ingreso, Gasto o Ahorro." });
 
         var idHogar = User.GetIdHogar();
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == movimiento.IdCategoria && c.IdHogar == idHogar);
@@ -262,7 +262,7 @@ public class MovimientosController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] Movimiento input)
     {
         if (!EsTipoMovimientoValido(input.Tipo))
-            return BadRequest(new { message = "El tipo debe ser Ingreso o Gasto." });
+            return BadRequest(new { message = "El tipo debe ser Ingreso, Gasto o Ahorro." });
 
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         if (movimiento is null)
@@ -287,7 +287,8 @@ public class MovimientosController : ControllerBase
 
     private static bool EsTipoMovimientoValido(string? tipo)
         => string.Equals(tipo, "Ingreso", StringComparison.Ordinal) ||
-           string.Equals(tipo, "Gasto", StringComparison.Ordinal);
+           string.Equals(tipo, "Gasto", StringComparison.Ordinal) ||
+           string.Equals(tipo, "Ahorro", StringComparison.Ordinal);
 
     /// <summary>Elimina un movimiento del hogar.</summary>
     /// <param name="id">Identificador del movimiento.</param>
@@ -306,10 +307,15 @@ public class MovimientosController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Obtiene el resumen de ingresos, gastos y balance del hogar.</summary>
+    /// <summary>Obtiene el resumen de ingresos, gastos, ahorro y balance del hogar.</summary>
     /// <param name="anio">Año por el que se filtrará el resumen, si se especifica junto con el mes.</param>
     /// <param name="mes">Mes por el que se filtrará el resumen, si se especifica junto con el año.</param>
-    /// <response code="200">Devuelve los totales de ingresos, gastos y balance.</response>
+    /// <remarks>
+    /// El ahorro se suma desde los aportes (AporteMeta) y no desde los movimientos,
+    /// por lo que también es correcto para los aportes hechos antes de generar el
+    /// movimiento de ahorro. Balance = Ingresos - Gastos - Ahorro.
+    /// </remarks>
+    /// <response code="200">Devuelve los totales de ingresos, gastos, ahorro y balance.</response>
     [ProducesResponseType(typeof(ResumenDashboardDTO), StatusCodes.Status200OK)]
     [HttpGet("resumen")]
     public async Task<ActionResult<ResumenDashboardDTO>> GetResumen([FromQuery] int? anio, [FromQuery] int? mes)
@@ -334,9 +340,15 @@ public class MovimientosController : ControllerBase
             })
             .SingleOrDefaultAsync();
 
+        // Misma ventana anio/mes que ingresos y gastos, pero sobre los aportes.
+        var aportes = _db.Aportes.AsNoTracking().Where(a => a.IdHogar == idHogar);
+        if (anio.HasValue && mes.HasValue)
+            aportes = aportes.Where(a => a.Fecha.Year == anio.Value && a.Fecha.Month == mes.Value);
+
         var totalIngresos = resumen?.TotalIngresos ?? 0m;
         var totalGastos = resumen?.TotalGastos ?? 0m;
+        var totalAhorro = await aportes.SumAsync(a => (decimal?)a.Monto) ?? 0m;
 
-        return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalIngresos - totalGastos));
+        return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalAhorro, totalIngresos - totalGastos - totalAhorro));
     }
 }

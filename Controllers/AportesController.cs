@@ -14,6 +14,9 @@ namespace RemesaSmartSV.Controllers;
 [Authorize]
 public class AportesController : ControllerBase
 {
+    /// <summary>Nombre de la categoría de ahorro que usan los movimientos generados por aportes.</summary>
+    private const string NombreCategoriaAhorro = "Otros ahorros";
+
     private readonly ApplicationDbContext _db;
 
     public AportesController(ApplicationDbContext db) => _db = db;
@@ -61,9 +64,9 @@ public class AportesController : ControllerBase
         if (repetido is not null)
             return ResultadoIdempotente(repetido, request, idHogar.Value, idUsuario);
 
-        var metaPertenece = await _db.MetasAhorro.AsNoTracking()
-            .AnyAsync(m => m.IdMeta == request.IdMeta && m.IdHogar == idHogar.Value);
-        if (!metaPertenece)
+        var meta = await _db.MetasAhorro.AsNoTracking()
+            .FirstOrDefaultAsync(m => m.IdMeta == request.IdMeta && m.IdHogar == idHogar.Value);
+        if (meta is null)
             return BadRequest(new { message = "La meta no existe o no pertenece a tu hogar." });
 
         var aporte = new AporteMeta
@@ -103,18 +106,28 @@ public class AportesController : ControllerBase
             else
             {
                 // EF InMemory no implementa ExecuteUpdate; se conserva una ruta para unit tests.
-                var meta = await _db.MetasAhorro
+                var metaActualizada = await _db.MetasAhorro
                     .FirstOrDefaultAsync(m => m.IdMeta == request.IdMeta && m.IdHogar == idHogar.Value);
-                if (meta is null)
+                if (metaActualizada is null)
                     return BadRequest(new { message = "La meta no existe o no pertenece a tu hogar." });
 
-                meta.MontoActual += request.Monto;
-                if (meta.MontoActual >= meta.MontoObjetivo)
-                    meta.Estado = "Completada";
+                metaActualizada.MontoActual += request.Monto;
+                if (metaActualizada.MontoActual >= metaActualizada.MontoObjetivo)
+                    metaActualizada.Estado = "Completada";
             }
 
             _db.Aportes.Add(aporte);
             await _db.SaveChangesAsync();
+
+            // El aporte deja rastro en la lista de movimientos (tipo "Ahorro"), con el
+            // mismo IdUsuario que aportó. Se hace dentro de la MISMA transacción: si el
+            // aporte se revierte (p. ej. colisión de la clave de idempotencia), el
+            // movimiento también, así que el reintento nunca lo duplica.
+            var categoriaAhorro = await ObtenerOCrearCategoriaAhorroAsync(idHogar.Value);
+            _db.Movimientos.Add(CrearMovimientoAhorro(
+                aporte, idHogar.Value, idUsuario, categoriaAhorro.IdCategoria, meta.Titulo));
+            await _db.SaveChangesAsync();
+
             if (transaction is not null) await transaction.CommitAsync();
 
             return CreatedAtAction(nameof(GetAportes), new { metaId = aporte.IdMeta }, ToResponse(aporte));
@@ -179,11 +192,82 @@ public class AportesController : ControllerBase
                 meta.Estado = "En progreso";
         }
 
+        // El movimiento de ahorro generado por el aporte se borra en la misma
+        // transacción. La marca "aporte:{id}" garantiza que solo se elimine el
+        // movimiento de ESTE aporte y no otro movimiento del hogar. Los aportes
+        // anteriores a esta feature no tienen movimiento, así que no hay nada que borrar.
+        var movimiento = await _db.Movimientos
+            .FirstOrDefaultAsync(m => m.IdHogar == idHogar.Value
+                                   && m.Tipo == "Ahorro"
+                                   && m.OrigenEmisora == MarcaAporte(aporte));
+        if (movimiento is not null)
+            _db.Movimientos.Remove(movimiento);
+
         _db.Aportes.Remove(aporte);
         await _db.SaveChangesAsync();
         if (transaction is not null) await transaction.CommitAsync();
         return NoContent();
     }
+
+    /// <summary>
+    /// Devuelve la categoría de ahorro del hogar que usan los movimientos de aportes.
+    /// Es determinista y estable por hogar: siempre "Otros ahorros" (la categoría
+    /// genérica ya sembrada por CategoriasSistema y por la migración Fase5), y se
+    /// reutiliza entre aportes; no se crea una categoría por aporte. Si el hogar no
+    /// la tiene, la crea de forma idempotente.
+    /// </summary>
+    private async Task<Categoria> ObtenerOCrearCategoriaAhorroAsync(int idHogar)
+    {
+        var normalizado = CategoriasSistema.Normalizar(NombreCategoriaAhorro);
+
+        // El plegado de nombres se aplica en memoria: por hogar hay muy pocas
+        // categorías de ahorro y así no se depende de la traducción del proveedor.
+        var existentes = await _db.Categorias.AsNoTracking()
+            .Where(c => c.IdHogar == idHogar && c.Tipo == "Ahorro")
+            .ToListAsync();
+
+        var categoria = existentes
+            .FirstOrDefault(c => CategoriasSistema.Normalizar(c.Nombre) == normalizado);
+        if (categoria is not null)
+            return categoria;
+
+        // Mismo nombre e icono que los que siembran CategoriasSistema y la migración Fase5.
+        categoria = new Categoria
+        {
+            IdHogar = idHogar,
+            Nombre = NombreCategoriaAhorro,
+            Tipo = "Ahorro",
+            Icono = "\uD83D\uDC37",
+            EsSistema = true
+        };
+        _db.Categorias.Add(categoria);
+        await _db.SaveChangesAsync();
+        return categoria;
+    }
+
+    /// <summary>
+    /// Movimiento de tipo "Ahorro" que representa el aporte en la lista de movimientos.
+    /// OrigenEmisora guarda la marca que enlaza el movimiento con su aporte.
+    /// </summary>
+    private static Movimiento CrearMovimientoAhorro(
+        AporteMeta aporte, int idHogar, int idUsuario, int idCategoria, string? tituloMeta)
+        => new()
+        {
+            IdHogar = idHogar,
+            IdUsuario = idUsuario,
+            IdCategoria = idCategoria,
+            Monto = aporte.Monto,
+            Fecha = aporte.Fecha,
+            Tipo = "Ahorro",
+            Descripcion = string.IsNullOrWhiteSpace(tituloMeta)
+                ? "Aporte a meta de ahorro"
+                : $"Aporte a la meta {tituloMeta}",
+            OrigenEmisora = MarcaAporte(aporte)
+        };
+
+    /// <summary>Marca única e inmutable que enlaza un movimiento de ahorro con su aporte.</summary>
+    private static string MarcaAporte(AporteMeta aporte)
+        => $"aporte:{aporte.IdAporte}";
 
     private async Task<int?> ObtenerHogarActualAsync()
     {
