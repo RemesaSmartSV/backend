@@ -166,6 +166,29 @@ public class AuthFlujoTests : IDisposable
     }
 
     [Fact]
+    public async Task HogaresController_Post_TokenViejoConHogarYaAbandonado_CreaElHogar()
+    {
+        // Regresión: el claim idHogar del token se firma una vez y vive 8 h, así que
+        // sigue diciendo "tenés hogar" aunque el usuario acabara de abandonar. El
+        // controlador chequeaba ese claim ANTES de leer la BD y respondía 409
+        // indebido. La autoridad sobre la membresía es la fila, no el token.
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var controller = new HogaresController(_db, CrearAuthService());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 99);
+
+        var result = await controller.Create(new CrearHogarRequest("Familia Nueva"));
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var respuesta = Assert.IsType<LoginResponse>(okResult.Value);
+        Assert.False(string.IsNullOrEmpty(respuesta.Token));
+
+        var hogar = Assert.IsType<Hogar>(await _db.Hogares.SingleAsync());
+        var usuarioActualizado = await _db.Usuarios.SingleAsync();
+        Assert.Equal(hogar.IdHogar, usuarioActualizado.IdHogar);
+        Assert.Equal("Admin", usuarioActualizado.Rol);
+    }
+
+    [Fact]
     public async Task UsuariosController_ActualizarPerfil_CambiaNombreYNiTocaRolNiHogar()
     {
         var hogar = new Hogar { NombreFamiliar = "Familia Rivera" };

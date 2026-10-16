@@ -36,14 +36,13 @@ public class HogaresController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<LoginResponse>> Create([FromBody] CrearHogarRequest request)
     {
-        // GetIdHogar() devuelve 0 cuando el token no trae hogar asignado.
-        if (User.GetIdHogar() != 0)
-            return Conflict(new { message = "Ya pertenecés a un hogar." });
-
+        // La autoridad sobre la membresía es la fila de la BD, no el claim idHogar
+        // del token: ese claim se firma una sola vez y vive 8 h, así que sigue
+        // diciendo "tenés hogar" aunque el usuario acabara de abandonar. Chequearlo
+        // antes de leer la BD producía un 409 indebido con un token viejo.
         var usuario = await _db.Usuarios.FindAsync(User.GetIdUsuario());
         if (usuario is null)
             return NotFound();
-        // No confiar solo en el claim: puede estar obsoleto tras aceptar una solicitud.
         if (usuario.IdHogar is > 0)
             return Conflict(new { message = "Ya pertenecés a un hogar." });
 
