@@ -368,4 +368,48 @@ public class RemesasControllerTests : IDisposable
         Assert.Equal(1, western.Cantidad);
         Assert.Equal(100m, western.MontoEnviado);
     }
+
+    [Fact]
+    public async Task Delete_RemesaConVinculadaApuntando_Retorna409YConservaLasDos()
+    {
+        await SembrarHogaresAsync();
+
+        // Envío (madre) y recepción vinculada a él.
+        var madre = NuevaRemesa(direccion: "Envio");
+        _db.Remesas.Add(madre);
+        await _db.SaveChangesAsync();
+
+        var hija = NuevaRemesa(direccion: "Recepcion");
+        hija.IdRemesaVinculada = madre.IdRemesa;
+        _db.Remesas.Add(hija);
+        await _db.SaveChangesAsync();
+
+        var controller = CrearController(idUsuario: 1, idHogar: 1);
+
+        var result = await controller.Delete(madre.IdRemesa);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Contains("vinculada", conflict.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        // Ninguna de las dos se borró: la FK Restrict no llegó a estallar.
+        Assert.Equal(2, await _db.Remesas.CountAsync());
+    }
+
+    [Fact]
+    public async Task Delete_RemesaMadreSinVinculadas_Retorna204()
+    {
+        await SembrarHogaresAsync();
+
+        var remesa = NuevaRemesa();
+        _db.Remesas.Add(remesa);
+        await _db.SaveChangesAsync();
+
+        var controller = CrearController(idUsuario: 1, idHogar: 1);
+
+        var result = await controller.Delete(remesa.IdRemesa);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Empty(_db.Remesas);
+    }
 }

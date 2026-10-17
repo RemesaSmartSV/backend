@@ -129,9 +129,11 @@ public class RemesasController : ControllerBase
     /// <response code="204">La remesa fue eliminada.</response>
     /// <response code="403">La remesa pertenece a tu hogar pero no la registraste y no sos Admin.</response>
     /// <response code="404">La remesa no existe o no pertenece a tu hogar.</response>
+    /// <response code="409">Otra remesa del hogar está vinculada a esta como cara opuesta.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -142,6 +144,15 @@ public class RemesasController : ControllerBase
         if (remesa.IdUsuario != User.GetIdUsuario() && !User.IsInRole("Admin"))
             return StatusCode(StatusCodes.Status403Forbidden,
                 new { message = "Solo el miembro que registró la remesa o un administrador puede eliminarla." });
+
+        // La FK self IdRemesaVinculada es Restrict: sin este chequeo el DELETE estallaría
+        // en un 500 cuando otra remesa apunte a esta como cara vinculada.
+        var hayVinculada = await _db.Remesas.AnyAsync(r => r.IdRemesaVinculada == id);
+        if (hayVinculada)
+            return Conflict(new
+            {
+                message = "Otra remesa del hogar está vinculada a esta. Desvinculala antes de eliminarla.",
+            });
 
         _db.Remesas.Remove(remesa);
         await _db.SaveChangesAsync();
