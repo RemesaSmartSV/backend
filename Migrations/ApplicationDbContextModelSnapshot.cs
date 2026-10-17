@@ -365,6 +365,66 @@ namespace RemesaSmartSV.Migrations
                     b.ToTable("Presupuestos");
                 });
 
+            modelBuilder.Entity("RemesaSmartSV.Entities.Remesa", b =>
+                {
+                    b.Property<int>("IdRemesa")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("IdRemesa"));
+
+                    b.Property<string>("Canal")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal>("Comision")
+                        .HasColumnType("decimal(10, 2)");
+
+                    b.Property<string>("Direccion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Folio")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<int>("IdHogar")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("IdRemesaVinculada")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("IdUsuario")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("MontoEnviado")
+                        .HasColumnType("decimal(10, 2)");
+
+                    b.Property<decimal>("MontoRecibido")
+                        .HasColumnType("decimal(10, 2)");
+
+                    b.Property<string>("Notas")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("IdRemesa");
+
+                    b.HasIndex("Fecha");
+
+                    b.HasIndex("IdHogar");
+
+                    b.HasIndex("IdRemesaVinculada");
+
+                    b.HasIndex("IdUsuario");
+
+                    b.ToTable("Remesas");
+                });
+
             modelBuilder.Entity("RemesaSmartSV.Entities.SolicitudUnion", b =>
                 {
                     b.Property<int>("IdSolicitud")
@@ -633,6 +693,31 @@ namespace RemesaSmartSV.Migrations
                     b.Navigation("Categoria");
 
                     b.Navigation("Hogar");
+                });
+
+            modelBuilder.Entity("RemesaSmartSV.Entities.Remesa", b =>
+                {
+                    b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
+                        .WithMany()
+                        .HasForeignKey("IdHogar")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RemesaSmartSV.Entities.Remesa", "RemesaVinculada")
+                        .WithMany()
+                        .HasForeignKey("IdRemesaVinculada")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RemesaSmartSV.Entities.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("IdUsuario")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Hogar");
+
+                    b.Navigation("RemesaVinculada");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("RemesaSmartSV.Entities.SolicitudUnion", b =>

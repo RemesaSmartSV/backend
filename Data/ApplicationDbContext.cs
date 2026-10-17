@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<InvitacionFamilia> InvitacionesFamilia { get; set; }
     public DbSet<SolicitudUnion> SolicitudesUnion { get; set; }
     public DbSet<Notificacion> Notificaciones { get; set; }
+    public DbSet<Remesa> Remesas { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -160,6 +161,33 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<AporteMeta>()
             .HasIndex(a => a.IdempotencyKey)
             .IsUnique();
+
+        // Ledger de remesas: FKs con Restrict (política §6.3, igual que el resto
+        // de las tablas financieras) e índices de consulta del listado y el resumen.
+        modelBuilder.Entity<Remesa>()
+            .HasOne(r => r.Hogar)
+            .WithMany()
+            .HasForeignKey(r => r.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Remesa>()
+            .HasOne(r => r.Usuario)
+            .WithMany()
+            .HasForeignKey(r => r.IdUsuario)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Vínculo envío↔recepción: Restrict evita borrar una remesa referenciada.
+        modelBuilder.Entity<Remesa>()
+            .HasOne(r => r.RemesaVinculada)
+            .WithMany()
+            .HasForeignKey(r => r.IdRemesaVinculada)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Remesa>()
+            .HasIndex(r => r.IdHogar);
+
+        modelBuilder.Entity<Remesa>()
+            .HasIndex(r => r.Fecha);
 
     }
 }
