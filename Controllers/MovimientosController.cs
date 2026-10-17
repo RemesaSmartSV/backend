@@ -259,10 +259,12 @@ public class MovimientosController : ControllerBase
     /// <response code="400">El tipo no es válido o la categoría no existe o no pertenece al hogar.</response>
     /// <response code="403">El usuario no es el dueño del movimiento ni un administrador del hogar.</response>
     /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
+    /// <response code="409">El movimiento es el espejo de un aporte y debe gestionarse desde Ahorro.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Movimiento input)
     {
@@ -275,6 +277,11 @@ public class MovimientosController : ControllerBase
 
         if (movimiento.IdUsuario != User.GetIdUsuario() && !User.IsInRole("Admin"))
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "Solo el miembro que registró el movimiento o un administrador puede modificarlo." });
+
+        // El espejo de un aporte es de solo lectura: el monto, la fecha y la marca
+        // viven en el aporte; tocarlos aquí rompería la coherencia con la meta.
+        if (EsMovimientoEspejoAporte(movimiento))
+            return Conflict(new { message = MensajeMovimientoEspejo });
 
         if (input.IdCategoria != movimiento.IdCategoria)
         {
@@ -298,15 +305,27 @@ public class MovimientosController : ControllerBase
            string.Equals(tipo, "Gasto", StringComparison.Ordinal) ||
            string.Equals(tipo, "Ahorro", StringComparison.Ordinal);
 
+    /// <summary>Mensaje al intentar modificar o borrar el movimiento espejo de un aporte.</summary>
+    private const string MensajeMovimientoEspejo =
+        "Este movimiento refleja un aporte a una meta de ahorro y se gestiona desde la página de Ahorro.";
+
+    /// <summary>True si el movimiento es el espejo generado por un aporte (marca "aporte:{id}"
+    /// en <see cref="Movimiento.OrigenEmisora"/>). Esos movimientos son de solo lectura:
+    /// editarlos o borrarlos desincronizaría el aporte, la meta, el KPI y las gráficas.</summary>
+    private static bool EsMovimientoEspejoAporte(Movimiento movimiento)
+        => movimiento.OrigenEmisora?.StartsWith("aporte:", StringComparison.Ordinal) == true;
+
     /// <summary>Elimina un movimiento del hogar.</summary>
     /// <remarks>Solo el miembro que registró el movimiento o un administrador del hogar puede eliminarlo.</remarks>
     /// <param name="id">Identificador del movimiento.</param>
     /// <response code="204">El movimiento fue eliminado.</response>
     /// <response code="403">El usuario no es el dueño del movimiento ni un administrador del hogar.</response>
     /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
+    /// <response code="409">El movimiento es el espejo de un aporte y debe gestionarse desde Ahorro.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -316,6 +335,11 @@ public class MovimientosController : ControllerBase
 
         if (movimiento.IdUsuario != User.GetIdUsuario() && !User.IsInRole("Admin"))
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "Solo el miembro que registró el movimiento o un administrador puede eliminarlo." });
+
+        // Borrar el espejo dejaría el aporte huérfano: el KPI seguiría contando
+        // el ahorro y la gráfica ya no lo mostraría. Se borra desde el aporte.
+        if (EsMovimientoEspejoAporte(movimiento))
+            return Conflict(new { message = MensajeMovimientoEspejo });
 
         _db.Movimientos.Remove(movimiento);
         await _db.SaveChangesAsync();

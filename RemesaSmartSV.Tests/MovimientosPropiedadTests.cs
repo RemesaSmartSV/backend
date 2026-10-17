@@ -122,6 +122,20 @@ public class MovimientosPropiedadTests : IDisposable
             Tipo = "Gasto",
             Descripcion = "Ajeno a otro hogar"
         });
+        // Movimiento espejo de un aporte (marca "aporte:{id}"): es de solo
+        // lectura en Movimientos, se gestiona desde la página de Ahorro.
+        _db.Movimientos.Add(new Movimiento
+        {
+            IdMovimiento = 3,
+            IdHogar = 1,
+            IdUsuario = 1,
+            IdCategoria = 1,
+            Monto = 50m,
+            Fecha = new DateTime(2026, 9, 30),
+            Tipo = "Ahorro",
+            Descripcion = "Aporte a la meta Viaje",
+            OrigenEmisora = "aporte:7"
+        });
 
         _db.SaveChanges();
     }
@@ -229,5 +243,48 @@ public class MovimientosPropiedadTests : IDisposable
 
         Assert.IsType<NotFoundResult>(result);
         Assert.NotNull(await _db.Movimientos.FindAsync(2));
+    }
+
+    [Fact]
+    public async Task Delete_MovimientoEspejoDeAporte_ReturnsConflictYLoConserva()
+    {
+        SembrarDatos();
+        // El dueño del espejo (usuario 1) intenta borrarlo desde Movimientos.
+        var controller = CrearController(idUsuario: 1, idHogar: 1, esAdmin: false);
+
+        var result = await controller.Delete(3);
+
+        var conflict = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+        Assert.Contains("aporte", conflict.Value?.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        // El espejo sigue intacto: borrarlo dejaría el aporte huérfano.
+        Assert.NotNull(await _db.Movimientos.FindAsync(3));
+    }
+
+    [Fact]
+    public async Task Update_MovimientoEspejoDeAporte_ReturnsConflictYNoModificaElRegistro()
+    {
+        SembrarDatos();
+        var controller = CrearController(idUsuario: 1, idHogar: 1, esAdmin: false);
+
+        var input = new Movimiento
+        {
+            IdCategoria = 1,
+            Monto = 999.99m,
+            Fecha = new DateTime(2026, 10, 1),
+            Tipo = "Gasto",
+            Descripcion = "Intento de edición del espejo"
+        };
+
+        var result = await controller.Update(3, input);
+
+        var conflict = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+
+        var movimiento = await _db.Movimientos.FindAsync(3);
+        Assert.NotNull(movimiento);
+        Assert.Equal(50m, movimiento!.Monto);
+        Assert.Equal("aporte:7", movimiento.OrigenEmisora);
     }
 }
