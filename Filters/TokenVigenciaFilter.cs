@@ -12,8 +12,13 @@ namespace RemesaSmartSV.Filters;
 /// <summary>
 /// Revalida en cada request autenticado que la membresía del usuario siga vigente
 /// en la base de datos. El token JWT dura 8 h y sus claims (idHogar, rol) quedan
-/// congelados al momento de firmarse: sin esta revalidación, un usuario expulsado
-/// o que abandonó su familia conservaría acceso con el token viejo hasta que expire.
+/// congelados al momento de firmarse.
+///
+/// Regla central: el token nunca puede afirmar más que la realidad. Si el token
+/// afirma una membresía mayor a la vigente (una familia que ya no es la suya, o
+/// el rol Admin sin respaldo en la BD), se responde 401. Si la subestima (recién
+/// unido a una familia, o recién promovido a Admin), se deja pasar: el token no
+/// otorga acceso y el usuario puede recuperarse con POST /Auth/refrescar-sesion.
 /// </summary>
 public class TokenVigenciaFilter : IAsyncActionFilter
 {
@@ -59,20 +64,29 @@ public class TokenVigenciaFilter : IAsyncActionFilter
             return;
         }
 
-        // El claim idHogar quedó congelado al firmar el token. Si en la BD el
-        // usuario ya no tiene hogar (abandonó o fue expulsado) o cambió de
-        // familia, el token ya no refleja la membresía vigente.
+        // El claim idHogar quedó congelado al firmar el token, y la comparación
+        // con la BD es asimétrica: solo se rechaza si el token afirma una familia
+        // que ya no es la vigente (expulsión, abandono o cambio de familia).
+        // Si el token afirma idHogar=0 (sin familia) y la BD sí le asigna una
+        // (recién unido), se deja pasar: el token subestima y, con GetIdHogar()
+        // en 0, los endpoints del hogar devuelven vacío/404/400 o 403 — no hay
+        // acceso a datos ajenos.
         var idHogarToken = context.HttpContext.User.GetIdHogar();
-        if ((usuario.IdHogar ?? 0) != idHogarToken)
+        if (idHogarToken != 0 && idHogarToken != (usuario.IdHogar ?? 0))
         {
             await ResponderNoVigente(context);
             return;
         }
 
-        // El rol también puede cambiar (degradación/promoción) mientras el token
-        // sigue vivo: se compara contra la BD para no perpetuar permisos viejos.
+        // El rol también puede cambiar mientras el token sigue vivo, y la
+        // comparación vuelve a ser asimétrica: solo se rechaza si el token afirma
+        // el privilegio más sensible (Admin) sin respaldo en la BD (degradación).
+        // Cualquier otra diferencia —p. ej. token Miembro y BD Admin tras una
+        // promoción— se deja pasar: el token subestima y [Authorize(Roles="Admin")]
+        // deniega con 403 por la vía normal, dejando libre el flujo de
+        // refrescar-sesion.
         var rolToken = context.HttpContext.User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        if ((usuario.Rol ?? string.Empty) != rolToken)
+        if (rolToken == "Admin" && (usuario.Rol ?? string.Empty) != "Admin")
         {
             await ResponderNoVigente(context);
             return;

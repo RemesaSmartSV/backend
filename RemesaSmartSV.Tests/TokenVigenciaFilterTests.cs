@@ -16,8 +16,10 @@ namespace RemesaSmartSV.Tests;
 
 /// <summary>
 /// Pruebas unitarias de <see cref="TokenVigenciaFilter"/>: revalida la membresía
-/// vigente en la BD para que un usuario expulsado o que abandonó su familia NO
-/// conserve acceso con un token JWT viejo (8 h, claims congelados).
+/// vigente en la BD. La regla es asimétrica —el token no puede afirmar más que
+/// la realidad—: expulsión, cambio de familia o degradación de Admin dan 401,
+/// pero un token que subestima la membresía (recién unido o recién promovido)
+/// se deja pasar para no romper POST /Auth/refrescar-sesion.
 /// </summary>
 public class TokenVigenciaFilterTests : IDisposable
 {
@@ -135,12 +137,55 @@ public class TokenVigenciaFilterTests : IDisposable
     }
 
     [Fact]
-    public async Task IdHogarCoincidePeroRolDifiere_Retorna401()
+    public async Task AdminDegradoAMiembro_Retorna401()
     {
-        // En la BD el usuario fue degradado a Miembro, pero el token aún dice Admin.
+        // En la BD el usuario fue degradado a Miembro, pero el token aún dice
+        // Admin: el token afirma el privilegio más sensible sin respaldo → 401.
         await SembrarUsuarioAsync(1, 5, "Miembro");
 
         var (nextLlamado, contexto) = await EjecutarFiltroAsync(ClaimsDe(1, 5, "Admin"));
+
+        Assert.False(nextLlamado);
+        var contenido = Assert.IsType<ContentResult>(contexto.Result);
+        Assert.Equal(StatusCodes.Status401Unauthorized, contenido.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecienUnido_BDTieneHogarClaimIdHogarCero_Pasa()
+    {
+        // Recién unido a una familia: la BD ya lo registró (IdHogar=5), pero el
+        // token viejo aún afirma idHogar=0. El token subestima → se deja pasar
+        // para que POST /Auth/refrescar-sesion pueda resincronizar la sesión.
+        await SembrarUsuarioAsync(1, 5, "Miembro");
+
+        var (nextLlamado, contexto) = await EjecutarFiltroAsync(ClaimsDe(1, 0, "Miembro"));
+
+        Assert.True(nextLlamado);
+        Assert.Null(contexto.Result);
+    }
+
+    [Fact]
+    public async Task PromovidoAAdmin_BDRolAdminClaimMiembro_Pasa()
+    {
+        // Recién promovido: la BD ya dice Admin, pero el token viejo aún dice
+        // Miembro. El token subestima → se deja pasar; si el endpoint exige
+        // Admin, [Authorize] deniega con 403 por la vía normal.
+        await SembrarUsuarioAsync(1, 5, "Admin");
+
+        var (nextLlamado, contexto) = await EjecutarFiltroAsync(ClaimsDe(1, 5, "Miembro"));
+
+        Assert.True(nextLlamado);
+        Assert.Null(contexto.Result);
+    }
+
+    [Fact]
+    public async Task CambioDeFamilia_ClaimIdHogar1_BDIdHogar2_Retorna401()
+    {
+        // Cambió de familia: el token aún afirma idHogar=1, pero la membresía
+        // vigente es idHogar=2. El token afirma más que la realidad → 401.
+        await SembrarUsuarioAsync(1, 2, "Miembro");
+
+        var (nextLlamado, contexto) = await EjecutarFiltroAsync(ClaimsDe(1, 1, "Miembro"));
 
         Assert.False(nextLlamado);
         var contenido = Assert.IsType<ContentResult>(contexto.Result);
