@@ -249,14 +249,19 @@ public class MovimientosController : ControllerBase
     }
 
     /// <summary>Actualiza un movimiento del hogar.</summary>
-    /// <remarks>Ejemplo de cuerpo: <c>{"idCategoria": 2, "monto": 18.75, "fecha": "2026-09-28T12:00:00Z", "tipo": "Gasto", "descripcion": "Compra de alimentos", "origenEmisora": "Transferencia"}</c></remarks>
+    /// <remarks>
+    /// Ejemplo de cuerpo: <c>{"idCategoria": 2, "monto": 18.75, "fecha": "2026-09-28T12:00:00Z", "tipo": "Gasto", "descripcion": "Compra de alimentos", "origenEmisora": "Transferencia"}</c>.
+    /// Solo el miembro que registró el movimiento o un administrador del hogar puede modificarlo.
+    /// </remarks>
     /// <param name="id">Identificador del movimiento.</param>
     /// <param name="input">Nuevos datos del movimiento.</param>
     /// <response code="204">El movimiento fue actualizado.</response>
     /// <response code="400">El tipo no es válido o la categoría no existe o no pertenece al hogar.</response>
+    /// <response code="403">El usuario no es el dueño del movimiento ni un administrador del hogar.</response>
     /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Movimiento input)
@@ -267,6 +272,9 @@ public class MovimientosController : ControllerBase
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         if (movimiento is null)
             return NotFound();
+
+        if (movimiento.IdUsuario != User.GetIdUsuario() && !User.IsInRole("Admin"))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Solo el miembro que registró el movimiento o un administrador puede modificarlo." });
 
         if (input.IdCategoria != movimiento.IdCategoria)
         {
@@ -291,10 +299,13 @@ public class MovimientosController : ControllerBase
            string.Equals(tipo, "Ahorro", StringComparison.Ordinal);
 
     /// <summary>Elimina un movimiento del hogar.</summary>
+    /// <remarks>Solo el miembro que registró el movimiento o un administrador del hogar puede eliminarlo.</remarks>
     /// <param name="id">Identificador del movimiento.</param>
     /// <response code="204">El movimiento fue eliminado.</response>
+    /// <response code="403">El usuario no es el dueño del movimiento ni un administrador del hogar.</response>
     /// <response code="404">El movimiento no existe o no pertenece al hogar.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -302,6 +313,10 @@ public class MovimientosController : ControllerBase
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         if (movimiento is null)
             return NotFound();
+
+        if (movimiento.IdUsuario != User.GetIdUsuario() && !User.IsInRole("Admin"))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Solo el miembro que registró el movimiento o un administrador puede eliminarlo." });
+
         _db.Movimientos.Remove(movimiento);
         await _db.SaveChangesAsync();
         return NoContent();
