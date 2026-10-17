@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RemesaSmartSV.Converters;
 using RemesaSmartSV.Data;
+using RemesaSmartSV.Filters;
 using RemesaSmartSV.Services;
 using Serilog;
 
@@ -19,7 +20,13 @@ builder.Host.UseSerilog((context, configuration) =>
         .WriteTo.Console());
 
 builder.Services.AddControllers(options =>
-    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true)
+{
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+    // Revalida en cada request autenticado que el usuario siga vigente en la BD
+    // (membresía de hogar y rol). Sin esto, un token JWT de 8 h conserva claims
+    // de idHogar/rol congelados aunque el usuario haya abandonado o perdido su familia.
+    options.Filters.Add<TokenVigenciaFilter>();
+})
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -53,6 +60,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<GoogleNonceStore>();
+
+// Filtro global que revalida la membresía vigente contra la BD en cada request
+// autenticado (se resuelve con DI como scoped porque usa ApplicationDbContext).
+builder.Services.AddScoped<TokenVigenciaFilter>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Falta la clave Jwt:Key en la configuración.");
