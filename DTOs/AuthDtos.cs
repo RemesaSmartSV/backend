@@ -78,15 +78,33 @@ public record UpdateHogarRequest([Required] string NombreFamiliar);
 
 public record UpdateUsuarioRequest(string? Nombre, string? Rol);
 /// <summary>
-/// Resumen del tablero. TotalAhorro viene de los aportes (AporteMeta), no de los
-/// movimientos, así que es correcto también para los aportes anteriores a la
-/// feature de ahorro-en-dashboard. Balance = Ingresos - Gastos - Ahorro.
+/// Desglose del ahorro por meta dentro del período consultado:
+/// suma de los AporteMeta de cada meta, solo metas con monto &gt; 0,
+/// ordenado por monto descendente.
+/// </summary>
+public record AporteMetaResumenDTO(int IdMeta, string Titulo, decimal Monto);
+
+/// <summary>
+/// Resumen del tablero. TotalAhorro suma los aportes (AporteMeta) del período
+/// más los movimientos de tipo "Ahorro" no generados por un aporte (sin la
+/// marca "aporte:" en OrigenEmisora), para no duplicar los que ya vienen de
+/// AporteMeta. Balance = Ingresos - Gastos - Ahorro.
 /// </summary>
 public record ResumenDashboardDTO(
     decimal TotalIngresos,
     decimal TotalGastos,
     decimal TotalAhorro,
-    decimal Balance);
+    decimal Balance)
+{
+    /// <summary>True si hay algún movimiento o algún aporte en el rango consultado.</summary>
+    public bool TieneDatos { get; init; }
+
+    /// <summary>Suma de los movimientos de tipo "Ingreso" de la categoría "Salario" en el rango.</summary>
+    public decimal IngresosSalario { get; init; }
+
+    /// <summary>Aportes por meta en el rango (solo metas con monto &gt; 0, orden desc).</summary>
+    public List<AporteMetaResumenDTO> AportesPorMeta { get; init; } = new();
+}
 // Cuerpo de POST api/Invitaciones: correo del destinatario a invitar.
 public record InvitarRequest(
     [Required, EmailAddress] string Correo);

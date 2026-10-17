@@ -308,26 +308,69 @@ public class MovimientosController : ControllerBase
     }
 
     /// <summary>Obtiene el resumen de ingresos, gastos, ahorro y balance del hogar.</summary>
-    /// <param name="anio">Año por el que se filtrará el resumen, si se especifica junto con el mes.</param>
-    /// <param name="mes">Mes por el que se filtrará el resumen, si se especifica junto con el año.</param>
+    /// <param name="anio">Año del resumen. Con <c>mes</c> filtra ese mes; solo, filtra el año completo en UTC.</param>
+    /// <param name="mes">Mes del resumen; requiere <c>anio</c> para aplicarse.</param>
+    /// <param name="fechaInicio">Inicio del rango (inclusive). Tiene prioridad sobre anio/mes.</param>
+    /// <param name="fechaFin">Fin del rango (inclusive). Tiene prioridad sobre anio/mes.</param>
     /// <remarks>
-    /// El ahorro se suma desde los aportes (AporteMeta) y no desde los movimientos,
-    /// por lo que también es correcto para los aportes hechos antes de generar el
-    /// movimiento de ahorro. Balance = Ingresos - Gastos - Ahorro.
+    /// Prelación de filtros: si vienen <c>fechaInicio</c> y/o <c>fechaFin</c>, se usa ese rango
+    /// (abierto si falta uno de los dos); si no, anio+mes filtra el mes; si no, solo anio
+    /// filtra el año completo en UTC; si no, se devuelve el historial completo.
+    /// El ahorro suma los aportes (AporteMeta) del período más los movimientos de tipo
+    /// "Ahorro" no generados por un aporte. Balance = Ingresos - Gastos - Ahorro.
     /// </remarks>
-    /// <response code="200">Devuelve los totales de ingresos, gastos, ahorro y balance.</response>
+    /// <response code="200">Devuelve los totales del período consultado.</response>
     [ProducesResponseType(typeof(ResumenDashboardDTO), StatusCodes.Status200OK)]
     [HttpGet("resumen")]
-    public async Task<ActionResult<ResumenDashboardDTO>> GetResumen([FromQuery] int? anio, [FromQuery] int? mes)
+    public async Task<ActionResult<ResumenDashboardDTO>> GetResumen(
+        [FromQuery] int? anio,
+        [FromQuery] int? mes,
+        [FromQuery] DateTime? fechaInicio = null,
+        [FromQuery] DateTime? fechaFin = null)
     {
         var idHogar = User.GetIdHogar();
-        var query = _db.Movimientos.Where(m => m.IdHogar == idHogar);
 
-        if (anio.HasValue && mes.HasValue)
-            query = query.Where(m => m.Fecha.Year == anio.Value && m.Fecha.Month == mes.Value);
+        // Prelación: rango explícito (fechaInicio/fechaFin) > anio+mes > solo anio > historial completo.
+        var usarRangoFechas = fechaInicio.HasValue || fechaFin.HasValue;
+        DateTime? inicioRango = fechaInicio;
+        DateTime? finRango = fechaFin;
 
-        var resumen = await query
-            .AsNoTracking()
+        if (!usarRangoFechas && anio.HasValue && !mes.HasValue)
+        {
+            // Corrección: antes un anio sin mes se ignoraba en silencio y se devolvía todo.
+            // Ahora el año solo filtra el año completo (1 de enero al 31 de diciembre, UTC).
+            inicioRango = new DateTime(anio.Value, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            finRango = new DateTime(anio.Value, 12, 31, 23, 59, 59, 999, DateTimeKind.Utc).AddTicks(9999);
+        }
+
+        var queryMovimientos = _db.Movimientos.AsNoTracking().Where(m => m.IdHogar == idHogar);
+        var queryAportes = _db.Aportes.AsNoTracking().Where(a => a.IdHogar == idHogar);
+
+        if (!usarRangoFechas && anio.HasValue && mes.HasValue)
+        {
+            // Comportamiento histórico del filtro por mes, sin cambios.
+            queryMovimientos = queryMovimientos
+                .Where(m => m.Fecha.Year == anio.Value && m.Fecha.Month == mes.Value);
+            queryAportes = queryAportes
+                .Where(a => a.Fecha.Year == anio.Value && a.Fecha.Month == mes.Value);
+        }
+        else
+        {
+            if (inicioRango.HasValue)
+            {
+                var desde = inicioRango.Value;
+                queryMovimientos = queryMovimientos.Where(m => m.Fecha >= desde);
+                queryAportes = queryAportes.Where(a => a.Fecha >= desde);
+            }
+            if (finRango.HasValue)
+            {
+                var hasta = finRango.Value;
+                queryMovimientos = queryMovimientos.Where(m => m.Fecha <= hasta);
+                queryAportes = queryAportes.Where(a => a.Fecha <= hasta);
+            }
+        }
+
+        var resumen = await queryMovimientos
             .GroupBy(_ => 1)
             .Select(grupo => new
             {
@@ -340,15 +383,46 @@ public class MovimientosController : ControllerBase
             })
             .SingleOrDefaultAsync();
 
-        // Misma ventana anio/mes que ingresos y gastos, pero sobre los aportes.
-        var aportes = _db.Aportes.AsNoTracking().Where(a => a.IdHogar == idHogar);
-        if (anio.HasValue && mes.HasValue)
-            aportes = aportes.Where(a => a.Fecha.Year == anio.Value && a.Fecha.Month == mes.Value);
-
         var totalIngresos = resumen?.TotalIngresos ?? 0m;
         var totalGastos = resumen?.TotalGastos ?? 0m;
-        var totalAhorro = await aportes.SumAsync(a => (decimal?)a.Monto) ?? 0m;
 
-        return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalAhorro, totalIngresos - totalGastos - totalAhorro));
+        var ingresosSalario = await queryMovimientos
+            .Where(m => m.Tipo == "Ingreso" && m.Categoria.Nombre == "Salario")
+            .SumAsync(m => (decimal?)m.Monto) ?? 0m;
+
+        var totalAportes = await queryAportes.SumAsync(a => (decimal?)a.Monto) ?? 0m;
+
+        // Unificación del ahorro: el total es la suma de aportes (AporteMeta) del período
+        // más los movimientos de tipo "Ahorro" hechos a mano. Los movimientos generados por
+        // un aporte llevan la marca "aporte:{id}" en OrigenEmisora y ya están contados en
+        // totalAportes, así que se excluyen aquí para no duplicarlos.
+        var totalAhorroMovimientos = await queryMovimientos
+            .Where(m => m.Tipo == "Ahorro"
+                && (m.OrigenEmisora == null || !m.OrigenEmisora.StartsWith("aporte:")))
+            .SumAsync(m => (decimal?)m.Monto) ?? 0m;
+        var totalAhorro = totalAportes + totalAhorroMovimientos;
+
+        // El GroupBy sobre la navegación MetaAhorro no es traducible por EF,
+        // así que se materializa primero y se agrupa en memoria.
+        var aportesDetalle = await queryAportes
+            .Select(a => new { a.IdMeta, a.MetaAhorro.Titulo, a.Monto })
+            .ToListAsync();
+
+        var aportesPorMeta = aportesDetalle
+            .GroupBy(a => new { a.IdMeta, a.Titulo })
+            .Select(g => new AporteMetaResumenDTO(g.Key.IdMeta, g.Key.Titulo, g.Sum(a => a.Monto)))
+            .Where(x => x.Monto > 0)
+            .OrderByDescending(x => x.Monto)
+            .ToList();
+
+        var hayMovimientos = await queryMovimientos.AnyAsync();
+        var hayAportes = await queryAportes.AnyAsync();
+
+        return Ok(new ResumenDashboardDTO(totalIngresos, totalGastos, totalAhorro, totalIngresos - totalGastos - totalAhorro)
+        {
+            TieneDatos = hayMovimientos || hayAportes,
+            IngresosSalario = ingresosSalario,
+            AportesPorMeta = aportesPorMeta
+        });
     }
 }

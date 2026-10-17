@@ -11,9 +11,9 @@ using RemesaSmartSV.Services;
 namespace RemesaSmartSV.Tests;
 
 /// <summary>
-/// Cubre el resumen del tablero con la regla «ingreso y ahorro por separado»:
-/// TotalAhorro se suma desde AporteMeta (no desde los movimientos) y
-/// Balance = Ingresos - Gastos - Ahorro.
+/// Cubre el resumen del tablero con la regla de ahorro unificado:
+/// TotalAhorro suma los AporteMeta del período más los movimientos de tipo
+/// "Ahorro" sin marca "aporte:", y Balance = Ingresos - Gastos - Ahorro.
 /// </summary>
 public class MovimientosResumenTests : IDisposable
 {
@@ -155,14 +155,14 @@ public class MovimientosResumenTests : IDisposable
     }
 
     [Fact]
-    public async Task GetResumen_ElAhorroSaleDeLosAportesYNoDeLosMovimientos()
+    public async Task GetResumen_ElAhorroSumaAportesYMovimientosManualesSinDuplicar()
     {
         await SembrarMovimientosAsync();
 
         // Aporte anterior a la feature: no tiene movimiento asociado.
         await SembrarAporteAsync(80m, new DateTime(2026, 10, 6));
 
-        // Un movimiento de ahorro huérfano no debe sumar al KPI: la fuente es Aportes.
+        // Un movimiento de ahorro hecho a mano (sin marca "aporte:") ahora suma al KPI.
         var categoria = new Categoria { IdHogar = 1, Nombre = "Vehículo", Tipo = "Ahorro" };
         _db.Categorias.Add(categoria);
         await _db.SaveChangesAsync();
@@ -171,7 +171,7 @@ public class MovimientosResumenTests : IDisposable
             IdHogar = 1,
             IdUsuario = 1,
             IdCategoria = categoria.IdCategoria,
-            Monto = 9999m,
+            Monto = 120m,
             Fecha = new DateTime(2026, 10, 7),
             Tipo = "Ahorro",
         });
@@ -182,8 +182,8 @@ public class MovimientosResumenTests : IDisposable
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<ResumenDashboardDTO>(ok.Value);
 
-        Assert.Equal(80m, dto.TotalAhorro);
-        Assert.Equal(520m, dto.Balance);
+        Assert.Equal(200m, dto.TotalAhorro);
+        Assert.Equal(400m, dto.Balance);
     }
 
     [Fact]
