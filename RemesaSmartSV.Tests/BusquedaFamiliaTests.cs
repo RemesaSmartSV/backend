@@ -283,6 +283,55 @@ public class BusquedaFamiliaTests : IDisposable
     }
 
     // ------------------------------------------------------------------
+    // Buscar por código (formato vigente de 6 dígitos y legacy RS-FAM-)
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task BuscarPorCodigo_ConSeisDigitos_EncuentraElHogar()
+    {
+        var hogar = SembrarHogar(1, "Familia Rivera");
+        hogar.CodigoPublico = "048293";
+        _db.SaveChanges();
+        var controller = Hogares(1, null);
+
+        var result = await controller.BuscarPorCodigo("048293");
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var encontrado = Assert.IsType<HogarBusquedaDto>(ok.Value);
+        Assert.Equal("048293", encontrado.CodigoPublico);
+        Assert.Equal("Familia Rivera", encontrado.NombreFamiliar);
+    }
+
+    [Fact]
+    public async Task BuscarPorCodigo_ConFormatoLegacy_EncuentraElHogar()
+    {
+        // Compatible con los códigos hex históricos de la BD, que usan el
+        // alfabeto laxo A-Z/0-9 y no el estricto del viejo generador.
+        var hogar = SembrarHogar(1, "Familia Rivera");
+        hogar.CodigoPublico = "RS-FAM-83656A6F88F54631";
+        _db.SaveChanges();
+        var controller = Hogares(1, null);
+
+        var result = await controller.BuscarPorCodigo("rs-fam-83656a6f88f54631");
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var encontrado = Assert.IsType<HogarBusquedaDto>(ok.Value);
+        Assert.Equal("RS-FAM-83656A6F88F54631", encontrado.CodigoPublico);
+        Assert.Equal("Familia Rivera", encontrado.NombreFamiliar);
+    }
+
+    [Fact]
+    public async Task BuscarPorCodigo_FormatoInvalido_RetornaBadRequest()
+    {
+        var controller = Hogares(1, null);
+
+        var result = await controller.BuscarPorCodigo("12345");
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("formato válido", bad.Value?.ToString());
+    }
+
+    // ------------------------------------------------------------------
     // Escrituras sin hogar deben dar 400, nunca 500
     // ------------------------------------------------------------------
 

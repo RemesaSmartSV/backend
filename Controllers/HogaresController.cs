@@ -48,6 +48,9 @@ public class HogaresController : ControllerBase
 
         var hogar = new Hogar { NombreFamiliar = request.NombreFamiliar };
         var creado = false;
+        // El código vigente tiene 10^6 combinaciones: la colisión con el índice
+        // único IX_Hogares_CodigoPublico es improbable, pero se reintenta
+        // generando otro código (máx. 5 intentos) antes de propagar el 409.
         for (var intento = 0; intento < 5 && !creado; intento++)
         {
             hogar.CodigoPublico = CodigoHogar.Generar();
