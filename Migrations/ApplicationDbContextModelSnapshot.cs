@@ -487,7 +487,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
                         .WithMany()
                         .HasForeignKey("IdHogar")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RemesaSmartSV.Entities.MetaAhorro", "MetaAhorro")
@@ -560,7 +560,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
                         .WithMany("MetasAhorro")
                         .HasForeignKey("IdHogar")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RemesaSmartSV.Entities.Usuario", "Usuario")
@@ -584,13 +584,13 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
                         .WithMany()
                         .HasForeignKey("IdHogar")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RemesaSmartSV.Entities.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("IdUsuario")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Categoria");
@@ -622,7 +622,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
                         .WithMany("Presupuestos")
                         .HasForeignKey("IdHogar")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Categoria");
@@ -659,7 +659,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
                         .WithMany("Usuarios")
                         .HasForeignKey("IdHogar")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Hogar");
                 });

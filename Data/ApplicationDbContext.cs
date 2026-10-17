@@ -26,12 +26,54 @@ public class ApplicationDbContext : DbContext
         base.OnModelCreating(modelBuilder);
 
         // Usuario.IdHogar es opcional (registro sin familia, sección 12/13 del prompt).
-        // Se fija CASCADE explícito para NO cambiar el comportamiento previo
-        // (EF por convención pondría ClientSetNull al volverse opcional la relación).
+        // Se fija RESTRICT: eliminar un hogar no debe eliminar en cascada a sus
+        // miembros ni a sus datos (requisito §6.3 Caso A: los datos se conservan).
         modelBuilder.Entity<Usuario>()
             .HasOne(u => u.Hogar)
             .WithMany(h => h.Usuarios)
             .HasForeignKey(u => u.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Requisito §6.3 Caso A: los datos financieros nunca se borran en cascada
+        // al eliminar o abandonar una familia. RESTRICT es la red de seguridad a
+        // nivel de base de datos: impide borrar un hogar mientras tenga registros.
+        modelBuilder.Entity<Movimiento>()
+            .HasOne(m => m.Hogar)
+            .WithMany()
+            .HasForeignKey(m => m.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<MetaAhorro>()
+            .HasOne(m => m.Hogar)
+            .WithMany(h => h.MetasAhorro)
+            .HasForeignKey(m => m.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AporteMeta>()
+            .HasOne(a => a.Hogar)
+            .WithMany()
+            .HasForeignKey(a => a.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Presupuesto>()
+            .HasOne(p => p.Hogar)
+            .WithMany(h => h.Presupuestos)
+            .HasForeignKey(p => p.IdHogar)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // No se puede eliminar un usuario que todavía tenga movimientos registrados.
+        modelBuilder.Entity<Movimiento>()
+            .HasOne(m => m.Usuario)
+            .WithMany()
+            .HasForeignKey(m => m.IdUsuario)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Las categorías nacen con el hogar y no tienen valor propio: se mantienen
+        // en cascada para que borrar un hogar sin datos financieros las limpie.
+        modelBuilder.Entity<Categoria>()
+            .HasOne(c => c.Hogar)
+            .WithMany(h => h.Categorias)
+            .HasForeignKey(c => c.IdHogar)
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Usuario>()

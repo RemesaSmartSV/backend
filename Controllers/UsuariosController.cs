@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
@@ -190,9 +191,11 @@ public class UsuariosController : ControllerBase
     /// <response code="204">El miembro fue eliminado.</response>
     /// <response code="400">El usuario actual no puede eliminarse a sí mismo.</response>
     /// <response code="404">El miembro no existe o no pertenece al hogar.</response>
+    /// <response code="409">El miembro tiene movimientos registrados que se conservan.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
@@ -216,10 +219,26 @@ public class UsuariosController : ControllerBase
                 return BadRequest(new { message = "No puedes eliminar al último administrador del hogar." });
         }
 
-        _db.Usuarios.Remove(usuario);
-        await _db.SaveChangesAsync();
+        try
+        {
+            _db.Usuarios.Remove(usuario);
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (EsRestriccionLlaveForanea(ex))
+        {
+            // Requisito §6.3: la FK Movimiento.Usuario es RESTRICT, así que la base
+            // de datos rechaza el borrado y los movimientos siguen intactos.
+            return Conflict(new { message = "No se puede eliminar: el miembro tiene movimientos registrados. Los datos financieros se conservan." });
+        }
+
         return NoContent();
     }
+
+    // Una FK con DELETE RESTRICT se materializa en PostgreSQL como error 23503
+    // (ForeignKeyViolation), con el PostgresException como inner exception.
+    private static bool EsRestriccionLlaveForanea(DbUpdateException exception)
+        => exception.InnerException is PostgresException postgres
+           && postgres.SqlState == PostgresErrorCodes.ForeignKeyViolation;
 
     /// <summary>Cambia la contraseña del usuario autenticado.</summary>
     /// <response code="204">La contraseña fue actualizada.</response>
@@ -248,9 +267,9 @@ public class UsuariosController : ControllerBase
     /// <summary>Abandona la familia actual del usuario autenticado.</summary>
     /// <remarks>
     /// Cualquier miembro puede salirse libremente, incluido el último Admin.
-    /// Si al salir la familia queda sin miembros, se elimina el hogar y con él
-    /// sus datos financieros (movimientos, metas, aportes, presupuestos y
-    /// categorías), porque dependen del hogar con borrado en cascada.
+    /// Si la familia queda sin miembros, el hogar y sus datos financieros se
+    /// conservan (requisito §6.3 Caso A): el hogar queda vacío de personas pero
+    /// mantiene movimientos, metas, aportes, presupuestos y categorías.
     /// </remarks>
     /// <response code="200">LoginResponse refrescado sin hogar.</response>
     /// <response code="400">No perteneces a ninguna familia.</response>
@@ -267,28 +286,14 @@ public class UsuariosController : ControllerBase
         if (usuario.IdHogar is null or 0)
             return BadRequest(new { message = "No perteneces a ninguna familia." });
 
-        var idHogar = usuario.IdHogar.Value;
-
         usuario.IdHogar = null;
         usuario.Rol = null;
         await _db.SaveChangesAsync();
 
-        // Si la familia se quedó sin miembros, deja de existir. El borrado en
-        // cascada de Hogares limpia también movimientos, metas, aportes,
-        // presupuestos, categorías, invitaciones y solicitudes de unión.
-        var quedanMiembros = await _db.Usuarios
-            .AnyAsync(u => u.IdHogar == idHogar && u.IdUsuario != idUsuario);
-
-        if (!quedanMiembros)
-        {
-            var hogar = await _db.Hogares.FindAsync(idHogar);
-            if (hogar is not null)
-            {
-                _db.Hogares.Remove(hogar);
-                await _db.SaveChangesAsync();
-            }
-        }
-
+        // Si la familia se quedó sin miembros, el hogar NO se elimina: conserva
+        // todos sus datos financieros por requisito (§6.3 Caso A). Las FK hacia
+        // Hogar son RESTRICT a nivel de base de datos, así que ninguna cascada
+        // destructiva puede borrarlos.
         return Ok(_authService.BuildLoginResponse(usuario));
     }
 

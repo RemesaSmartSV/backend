@@ -164,11 +164,20 @@ public class HogaresController : ControllerBase
     }
 
     /// <summary>Elimina el hogar del usuario actual.</summary>
+    /// <remarks>
+    /// Si la familia todavía tiene datos financieros (movimientos, metas de ahorro,
+    /// aportes o presupuestos) no se elimina: esos datos se conservan por requisito
+    /// y se responde con 409. Solo se elimina un hogar sin datos financieros (por
+    /// ejemplo, recién creado con sus categorías del sistema). Los miembros se
+    /// desvinculan del hogar; sus cuentas no se eliminan.
+    /// </remarks>
     /// <param name="id">Identificador del hogar.</param>
     /// <response code="204">El hogar fue eliminado.</response>
     /// <response code="404">El hogar no existe o no pertenece al usuario actual.</response>
+    /// <response code="409">La familia tiene datos financieros que se conservan.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
@@ -176,6 +185,31 @@ public class HogaresController : ControllerBase
         var hogar = await _db.Hogares.FindAsync(id);
         if (hogar is null || hogar.IdHogar != User.GetIdHogar())
             return NotFound();
+
+        // Requisito §6.3 Caso A: los datos financieros se conservan. Si la familia
+        // tiene registros, no se borra el hogar (y la FK con RESTRICT impediría
+        // cualquier cascada destructiva a nivel de base de datos).
+        var tieneDatosFinancieros =
+            await _db.Movimientos.AnyAsync(m => m.IdHogar == id) ||
+            await _db.MetasAhorro.AnyAsync(m => m.IdHogar == id) ||
+            await _db.Aportes.AnyAsync(a => a.IdHogar == id) ||
+            await _db.Presupuestos.AnyAsync(p => p.IdHogar == id);
+
+        if (tieneDatosFinancieros)
+            return Conflict(new
+            {
+                message = "No se puede eliminar la familia: tiene datos financieros (movimientos, metas de ahorro, aportes o presupuestos) que se conservan. El hogar solo puede eliminarse si no registra datos financieros."
+            });
+
+        // La FK Usuario.IdHogar es RESTRICT: los miembros se desvinculan del hogar
+        // en lugar de eliminarse junto con él.
+        var miembros = await _db.Usuarios.Where(u => u.IdHogar == id).ToListAsync();
+        foreach (var miembro in miembros)
+        {
+            miembro.IdHogar = null;
+            miembro.Rol = null;
+        }
+
         _db.Hogares.Remove(hogar);
         await _db.SaveChangesAsync();
         return NoContent();

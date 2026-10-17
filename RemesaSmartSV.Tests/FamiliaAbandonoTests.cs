@@ -11,9 +11,9 @@ using RemesaSmartSV.Services;
 namespace RemesaSmartSV.Tests;
 
 /// <summary>
-/// Pruebas de <see cref="UsuariosController.AbandonarFamilia"/>.
-/// Cubre el caso destructivo: cuando se va el último miembro, la familia
-/// deja de existir y el borrado en cascada elimina sus datos financieros.
+/// Pruebas de <see cref="UsuariosController.AbandonarFamilia"/> y del borrado
+/// de hogares. Cubre el requisito §6.3 Caso A: cuando se va el último miembro
+/// (o se intenta borrar la familia), el hogar y sus datos financieros se conservan.
 /// </summary>
 public class FamiliaAbandonoTests : IDisposable
 {
@@ -125,7 +125,7 @@ public class FamiliaAbandonoTests : IDisposable
     }
 
     [Fact]
-    public async Task AbandonarFamilia_UltimoMiembro_EliminaHogarYDatosFinancieros()
+    public async Task AbandonarFamilia_UltimoMiembro_ConservaHogarYDatosFinancieros()
     {
         var (hogar, unico) = SembrarHogarConDatos();
         var controller = CrearController(unico.IdUsuario);
@@ -134,15 +134,15 @@ public class FamiliaAbandonoTests : IDisposable
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
 
-        // El hogar dejo de existir.
-        Assert.Null(await _db.Hogares.FindAsync(hogar.IdHogar));
+        // El hogar sigue existiendo, vacio de personas pero intacto.
+        Assert.NotNull(await _db.Hogares.FindAsync(hogar.IdHogar));
 
-        // El borrado en cascada limpio TODAS las tablas hijas.
-        Assert.Empty(await _db.Categorias.Where(c => c.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Empty(await _db.MetasAhorro.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Empty(await _db.Aportes.Where(a => a.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Empty(await _db.Movimientos.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Empty(await _db.Presupuestos.Where(p => p.IdHogar == hogar.IdHogar).ToListAsync());
+        // Todos los datos financieros se conservan (§6.3 Caso A).
+        Assert.Single(await _db.Categorias.Where(c => c.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.MetasAhorro.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Aportes.Where(a => a.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Movimientos.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Presupuestos.Where(p => p.IdHogar == hogar.IdHogar).ToListAsync());
 
         // El usuario SOBREVIVE (su IdHogar es nullable) pero queda desvinculado.
         var usuario = await _db.Usuarios.FindAsync(unico.IdUsuario);
@@ -205,7 +205,7 @@ public class FamiliaAbandonoTests : IDisposable
         var result = await controller.AbandonarFamilia();
 
         Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Null(await _db.Hogares.FindAsync(hogar.IdHogar));
+        Assert.NotNull(await _db.Hogares.FindAsync(hogar.IdHogar));
     }
 
     [Fact]
@@ -239,5 +239,39 @@ public class FamiliaAbandonoTests : IDisposable
         var result = await controller.AbandonarFamilia();
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task HogaresController_Delete_ConDatosFinancieros_ReturnsConflict()
+    {
+        var (hogar, _) = SembrarHogarConDatos();
+
+        var controller = new HogaresController(_db, new AuthService(_db, _config));
+        var claims = new List<Claim>
+        {
+            new("idUsuario", "1"),
+            new("idHogar", hogar.IdHogar.ToString())
+        };
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"))
+            }
+        };
+
+        var result = await controller.Delete(hogar.IdHogar);
+
+        // El borrado se rechaza: la familia tiene datos financieros que se conservan.
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
+        Assert.Contains("datos financieros", conflict.Value?.ToString());
+
+        // Ni el hogar ni sus datos se eliminaron.
+        Assert.NotNull(await _db.Hogares.FindAsync(hogar.IdHogar));
+        Assert.Single(await _db.Categorias.Where(c => c.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.MetasAhorro.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Aportes.Where(a => a.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Movimientos.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Single(await _db.Presupuestos.Where(p => p.IdHogar == hogar.IdHogar).ToListAsync());
     }
 }
