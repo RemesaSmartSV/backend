@@ -170,6 +170,50 @@ public class InvitacionesNotificacionesTests : IDisposable
     }
 
     [Fact]
+    public async Task Invitar_TrasInvitacionRechazada_PermiteReinvitar()
+    {
+        // Invitación previa RECHAZADA al mismo correo en el mismo hogar: ya no
+        // compite por la unicidad, así que el chequeo no debe bloquearla.
+        await _db.InvitacionesFamilia.AddAsync(new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 1,
+            Correo = "ana@gmail.com",
+            Estado = InvitacionFamilia.EstadoRechazada,
+        });
+        await _db.SaveChangesAsync();
+
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com");
+        var resultado = await controller.Invitar(new InvitarRequest("ana@gmail.com"));
+
+        Assert.IsType<CreatedAtActionResult>(resultado.Result);
+        Assert.Equal(2, await _db.InvitacionesFamilia.CountAsync());
+        Assert.Single(await _db.InvitacionesFamilia
+            .Where(i => i.Estado == InvitacionFamilia.EstadoPendiente).ToListAsync());
+    }
+
+    /// <summary>
+    /// Verifica la configuración del índice unique de invitaciones: solo las
+    /// filas con Estado = 'Pendiente' compiten por (IdHogar, Correo). Es una
+    /// aserción de modelo, no de BD: EF InMemory construye el modelo pero no
+    /// ejecuta los índices; el comportamiento real se valida en PostgreSQL.
+    /// </summary>
+    [Fact]
+    public void Modelo_IndiceDeInvitacionesEsUnicoSoloParaPendientes()
+    {
+        var entidad = _db.Model.FindEntityType(typeof(InvitacionFamilia));
+        Assert.NotNull(entidad);
+
+        var indice = entidad!.GetIndexes()
+            .SingleOrDefault(i => i.Properties.Select(p => p.Name)
+                .SequenceEqual(new[] { "IdHogar", "Correo" }));
+
+        Assert.NotNull(indice);
+        Assert.True(indice!.IsUnique);
+        Assert.Equal("\"Estado\" = 'Pendiente'", indice.GetFilter());
+    }
+
+    [Fact]
     public async Task MisInvitaciones_CasaPorIdOporCorreo()
     {
         var invitado = await CrearUsuario("ana@gmail.com");

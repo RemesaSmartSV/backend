@@ -197,7 +197,8 @@ namespace RemesaSmartSV.Migrations
                     b.HasIndex("IdInvitador");
 
                     b.HasIndex("IdHogar", "Correo")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"Estado\" = 'Pendiente'");
 
                     b.ToTable("InvitacionesFamilia");
                 });
@@ -358,7 +359,8 @@ namespace RemesaSmartSV.Migrations
 
                     b.HasIndex("IdCategoria");
 
-                    b.HasIndex("IdHogar");
+                    b.HasIndex("IdHogar", "IdCategoria", "MesAnio")
+                        .IsUnique();
 
                     b.ToTable("Presupuestos");
                 });
@@ -473,6 +475,9 @@ namespace RemesaSmartSV.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("IdUsuario");
+
+                    b.HasIndex("Correo")
+                        .IsUnique();
 
                     b.HasIndex("GoogleSubject")
                         .IsUnique();

@@ -108,6 +108,25 @@ public class AuthFlujoTests : IDisposable
         Assert.Equal(1, await _db.Usuarios.CountAsync());
     }
 
+    /// <summary>
+    /// Verifica la configuración del índice unique de Usuarios.Correo (no su
+    /// comportamiento en BD): evita dos cuentas con el mismo correo, lo que
+    /// dejaría el login ambiguo. EF InMemory construye el modelo pero no
+    /// ejecuta los índices.
+    /// </summary>
+    [Fact]
+    public void Modelo_IndiceDeCorreoDeUsuarioEsUnico()
+    {
+        var entidad = _db.Model.FindEntityType(typeof(Usuario));
+        Assert.NotNull(entidad);
+
+        var indice = entidad!.GetIndexes()
+            .SingleOrDefault(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "Correo" }));
+
+        Assert.NotNull(indice);
+        Assert.True(indice!.IsUnique);
+    }
+
     [Fact]
     public async Task HogaresController_Post_CreaHogarAsignaAdminYSiembraCategorias()
     {

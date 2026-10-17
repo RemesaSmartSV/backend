@@ -80,6 +80,12 @@ public class ApplicationDbContext : DbContext
             .HasIndex(u => u.GoogleSubject)
             .IsUnique();
 
+        // Unicidad de correo: sin este indice dos cuentas podrian compartir el mismo
+        // correo y el login quedaria ambiguo (una consulta devolveria dos usuarios).
+        modelBuilder.Entity<Usuario>()
+            .HasIndex(u => u.Correo)
+            .IsUnique();
+
         modelBuilder.Entity<Hogar>()
             .HasIndex(h => h.CodigoPublico)
             .IsUnique();
@@ -111,8 +117,18 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(i => i.IdInvitado)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Solo las invitaciones pendientes compiten por la unicidad (mismo patron
+        // que SolicitudUnion): al rechazar, aceptar o cancelar se puede volver a
+        // invitar al mismo correo en el mismo hogar sin chocar con el indice.
         modelBuilder.Entity<InvitacionFamilia>()
             .HasIndex(i => new { i.IdHogar, i.Correo })
+            .IsUnique()
+            .HasFilter("\"Estado\" = 'Pendiente'");
+
+        // Un presupuesto por hogar, categoria y mes: evita que un doble submit
+        // cree dos limites para la misma categoria en el mismo periodo.
+        modelBuilder.Entity<Presupuesto>()
+            .HasIndex(p => new { p.IdHogar, p.IdCategoria, p.MesAnio })
             .IsUnique();
 
         modelBuilder.Entity<SolicitudUnion>()

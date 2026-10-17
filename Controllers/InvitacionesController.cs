@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
@@ -116,7 +117,16 @@ public class InvitacionesController : ControllerBase
             });
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (EsColisionInvitacion(ex))
+        {
+            // Carrera entre dos envios simultaneos: el indice unique de
+            // (IdHogar, Correo) solo para Estado = 'Pendiente' gano otra insercion.
+            return Conflict(new { message = "Ya existe una invitacion pendiente para este correo." });
+        }
 
         // Envía correo de invitación (no bloquea si falla — la invitación queda en BD).
         var nombreHogar = await _db.Hogares
@@ -264,4 +274,12 @@ public class InvitacionesController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    // Detecta la colision del indice unique (IdHogar, Correo) filtrado a Estado
+    // 'Pendiente': el unico caso legitimo es una carrera entre dos invitaciones
+    // simultaneas al mismo correo en el mismo hogar.
+    private static bool EsColisionInvitacion(DbUpdateException exception)
+        => exception.InnerException is PostgresException postgres
+           && postgres.SqlState == PostgresErrorCodes.UniqueViolation
+           && postgres.ConstraintName == "IX_InvitacionesFamilia_IdHogar_Correo";
 }

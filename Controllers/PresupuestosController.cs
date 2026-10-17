@@ -106,8 +106,10 @@ public class PresupuestosController : ControllerBase
     /// <param name="presupuesto">Datos del presupuesto que se creará.</param>
     /// <response code="201">El presupuesto fue creado.</response>
     /// <response code="400">La categoría no existe o no pertenece al hogar.</response>
+    /// <response code="409">Ya existe un presupuesto para esa categoría en ese mes.</response>
     [ProducesResponseType(typeof(Presupuesto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPost]
     public async Task<ActionResult<Presupuesto>> Create([FromBody] Presupuesto presupuesto)
     {
@@ -115,6 +117,15 @@ public class PresupuestosController : ControllerBase
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == presupuesto.IdCategoria && c.IdHogar == idHogar);
         if (categoria is null)
             return BadRequest(new { message = "La categoría no existe o no pertenece a tu hogar." });
+
+        // Un presupuesto por hogar, categoría y mes. El índice unique de la BD
+        // respalda este chequeo ante dobles submits concurrentes.
+        var duplicado = await _db.Presupuestos.AnyAsync(p =>
+            p.IdHogar == idHogar
+            && p.IdCategoria == presupuesto.IdCategoria
+            && p.MesAnio == presupuesto.MesAnio);
+        if (duplicado)
+            return Conflict(new { message = "Ya existe un presupuesto para esa categoría en ese mes." });
 
         presupuesto.IdPresupuesto = 0;
         presupuesto.IdHogar = idHogar;
@@ -130,15 +141,22 @@ public class PresupuestosController : ControllerBase
     /// <response code="204">El presupuesto fue actualizado.</response>
     /// <response code="400">La categoría no existe o no pertenece al hogar.</response>
     /// <response code="404">El presupuesto no existe o no pertenece al hogar.</response>
+    /// <response code="409">Ya existe un presupuesto para esa categoría en ese mes.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Presupuesto input)
     {
         var presupuesto = await _db.Presupuestos.FirstOrDefaultAsync(p => p.IdPresupuesto == id && p.IdHogar == User.GetIdHogar());
         if (presupuesto is null)
             return NotFound();
+
+        // Clave única original (hogar, categoría, mes) antes de mutar la entidad.
+        var categoriaOriginal = presupuesto.IdCategoria;
+        var mesOriginal = presupuesto.MesAnio;
+
         if (input.IdCategoria != presupuesto.IdCategoria)
         {
             var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == input.IdCategoria && c.IdHogar == User.GetIdHogar());
@@ -146,6 +164,20 @@ public class PresupuestosController : ControllerBase
                 return BadRequest(new { message = "La categoría no existe o no pertenece a tu hogar." });
             presupuesto.IdCategoria = input.IdCategoria;
         }
+
+        // Cambiar de categoría o de mes mueve la clave única (hogar, categoría, mes):
+        // hay que descartar que ya exista otro presupuesto con esa combinación.
+        if (presupuesto.IdCategoria != categoriaOriginal || input.MesAnio != mesOriginal)
+        {
+            var duplicado = await _db.Presupuestos.AnyAsync(p =>
+                p.IdPresupuesto != id
+                && p.IdHogar == User.GetIdHogar()
+                && p.IdCategoria == input.IdCategoria
+                && p.MesAnio == input.MesAnio);
+            if (duplicado)
+                return Conflict(new { message = "Ya existe un presupuesto para esa categoría en ese mes." });
+        }
+
         presupuesto.MontoLimite = input.MontoLimite;
         presupuesto.MesAnio = input.MesAnio;
         await _db.SaveChangesAsync();
