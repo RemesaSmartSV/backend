@@ -63,40 +63,63 @@ public class SmtpEmailService : IEmailService
     }
 
     /// <summary>
-    /// Plantilla base compartida por todos los correos: header con la marca
-    /// "RemesaSmart SV" sobre el azul institucional #123B8F, contenedor blanco
-    /// de contenido con tipografía Arial, botón CTA opcional (#2563eb) y footer
-    /// con el año y el aviso de ignorar el correo. Elimina las copias casi
+    /// Plantilla base compartida por todos los correos. Diseño transactional:
+    /// preheader oculto (texto de vista previa en la bandeja), header con marca y
+    /// tagline, tipografía moderna, ícono por tipo de correo, tarjeta con sombra
+    /// redondeada, CTA con elevación y footer con aviso. Elimina las copias casi
     /// idénticas de HTML que existían por cada tipo de notificación.
     /// </summary>
-    private static string Plantilla(string titulo, string cuerpoHtml, string? enlaceCta = null, string textoCta = "Ver más")
+    private static string Plantilla(
+        string titulo,
+        string cuerpoHtml,
+        string? enlaceCta = null,
+        string textoCta = "Ver más",
+        string? icono = null,
+        string? preheader = null)
     {
         var anio = DateTime.UtcNow.Year;
+        var fuente = "'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+
+        var preheaderHtml = string.IsNullOrEmpty(preheader)
+            ? string.Empty
+            : $"""<div style="display:none;max-height:0;overflow:hidden;mso-hide:all">{preheader}</div>""";
+
+        var iconoHtml = string.IsNullOrEmpty(icono)
+            ? string.Empty
+            : $"""<div style="font-size:38px;text-align:center;margin:0 0 10px;line-height:1">{icono}</div>""";
+
         var ctaHtml = string.IsNullOrEmpty(enlaceCta)
             ? string.Empty
             : $"""
-              <div style="text-align:center;margin:30px 0">
-                  <a href="{enlaceCta}" style="background:#2563eb;color:white;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:bold;display:inline-block">
+              <div style="text-align:center;margin:28px 0 6px">
+                  <a href="{enlaceCta}" style="background:#2563eb;color:#ffffff;padding:13px 32px;border-radius:10px;text-decoration:none;font-weight:600;display:inline-block;font-family:{fuente};box-shadow:0 3px 10px rgba(37,99,235,.35)">
                       {textoCta}
                   </a>
               </div>
               """;
 
         return $"""
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#f3f4f6">
-                <div style="background:#123B8F;padding:20px;border-radius:10px 10px 0 0;text-align:center">
-                    <h1 style="color:white;margin:0">RemesaSmart SV</h1>
+            <html>
+            <body style="margin:0;padding:0;background:#eef2f7;">
+                {preheaderHtml}
+                <div style="font-family:{fuente};max-width:600px;margin:0 auto;padding:24px 12px">
+                    <div style="background:#123B8F;border-radius:16px 16px 0 0;padding:30px 24px;text-align:center">
+                        <div style="font-size:24px;font-weight:700;color:#ffffff;letter-spacing:.5px">RemesaSmart SV</div>
+                        <div style="font-size:11px;color:#a9c1f0;text-transform:uppercase;letter-spacing:2px;margin-top:8px">Finanzas familiares y remesas</div>
+                    </div>
+                    <div style="background:#ffffff;padding:34px 30px;border-radius:0 0 16px 16px;box-shadow:0 4px 14px rgba(18,59,143,.12)">
+                        {iconoHtml}
+                        <h2 style="color:#111827;margin:0 0 18px;font-size:21px;text-align:center;font-weight:700">{titulo}</h2>
+                        {cuerpoHtml}
+                        {ctaHtml}
+                    </div>
+                    <div style="text-align:center;padding:22px 8px 4px;color:#94a3b8;font-size:11px;line-height:1.7">
+                        <p style="margin:3px 0">© {anio} RemesaSmart SV · Finanzas familiares y remesas de forma simple</p>
+                        <p style="margin:3px 0">Si no esperabas este correo, puedes ignorarlo sin problema.</p>
+                    </div>
                 </div>
-                <div style="background:white;padding:30px;border-radius:0 0 10px 10px">
-                    <h2 style="color:#1f2937;margin-top:0">{titulo}</h2>
-                    {cuerpoHtml}
-                    {ctaHtml}
-                </div>
-                <div style="text-align:center;padding:16px;color:#6b7280;font-size:12px">
-                    <p style="margin:4px 0">© {anio} RemesaSmart SV</p>
-                    <p style="margin:4px 0">Si no esperabas este correo, puedes ignorarlo.</p>
-                </div>
-            </div>
+            </body>
+            </html>
             """;
     }
 
@@ -113,7 +136,8 @@ public class SmtpEmailService : IEmailService
             <p style="color:#6b7280;font-size:13px">El enlace expira en 24 horas.</p>
             """;
 
-        var html = Plantilla("Te invitaron a una familia", cuerpo, enlace, "Revisar invitación");
+        var html = Plantilla("Te invitaron a una familia", cuerpo, enlace, "Revisar invitación",
+            icono: "👨‍👩‍👧", preheader: $"{nombreInvitador} te invitó a unirte a la familia {nombreFamilia}");
 
         var texto = $"RemesaSmart SV - Te invitaron a la familia {nombreFamilia}. Acepta en: {enlace}";
 
@@ -135,7 +159,8 @@ public class SmtpEmailService : IEmailService
             </p>
             """;
 
-        var html = Plantilla("Restablecer contraseña", cuerpo, enlace, "Restablecer contraseña");
+        var html = Plantilla("Restablecer contraseña", cuerpo, enlace, "Restablecer contraseña",
+            icono: "🔑", preheader: "Restablece tu contraseña en un solo paso");
 
         var texto = $"RemesaSmart SV - Restablece tu contraseña en: {enlace}";
 
@@ -161,7 +186,8 @@ public class SmtpEmailService : IEmailService
             </div>
             """;
 
-        var html = Plantilla("Aviso de presupuesto", cuerpo, enlace, "Ver presupuesto");
+        var html = Plantilla("Aviso de presupuesto", cuerpo, enlace, "Ver presupuesto",
+            icono: "📊", preheader: $"{nombrePresupuesto}: alcanzaste el {porcentaje}% de tu límite");
 
         var texto = $"RemesaSmart SV - Tu presupuesto {nombrePresupuesto} alcanzó el {porcentaje}% de su límite (${montoGastado:F2} de ${montoLimite:F2}).";
 
@@ -186,7 +212,8 @@ public class SmtpEmailService : IEmailService
             </div>
             """;
 
-        var html = Plantilla("⚠️ Presupuesto excedido", cuerpo, enlace, "Ver detalles");
+        var html = Plantilla("Presupuesto excedido", cuerpo, enlace, "Ver detalles",
+            icono: "🚨", preheader: $"{nombrePresupuesto} superó su límite por ${diferencia:F2}");
 
         var texto = $"RemesaSmart SV - Tu presupuesto {nombrePresupuesto} excedió el límite (${montoGastado:F2} de ${montoLimite:F2}, exceso ${diferencia:F2}).";
 
@@ -224,7 +251,8 @@ public class SmtpEmailService : IEmailService
             <p style="color:#4b5563;line-height:1.6">Si este acceso lo hiciste tú, ignora este correo.</p>
             """;
 
-        var html = Plantilla("Nuevo acceso a tu cuenta", cuerpo);
+        var html = Plantilla("Nuevo acceso a tu cuenta", cuerpo,
+            icono: "🔐", preheader: $"Nuevo acceso el {fecha}");
 
         var texto = $"RemesaSmart SV - Nuevo acceso a tu cuenta el {fecha}.";
 
@@ -247,7 +275,8 @@ public class SmtpEmailService : IEmailService
             </p>
             """;
 
-        var html = Plantilla("Tu contraseña fue cambiada", cuerpo);
+        var html = Plantilla("Tu contraseña fue cambiada", cuerpo,
+            icono: "🛡️", preheader: $"Tu contraseña fue cambiada el {fecha}");
 
         var texto = $"RemesaSmart SV - Tu contraseña fue cambiada el {fecha}.";
 
@@ -275,7 +304,8 @@ public class SmtpEmailService : IEmailService
               </p>
               """;
 
-        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Iniciar sesión");
+        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Iniciar sesión",
+            icono: aceptada ? "✅" : "❌", preheader: titulo);
 
         var texto = $"RemesaSmart SV - {titulo}: familia {nombreFamilia}.";
 
@@ -301,7 +331,8 @@ public class SmtpEmailService : IEmailService
               </p>
               """;
 
-        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Ver mi familia");
+        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Ver mi familia",
+            icono: aceptada ? "✅" : "❌", preheader: titulo);
 
         var texto = $"RemesaSmart SV - {titulo}: {nombreInvitado} y la familia {nombreFamilia}.";
 
