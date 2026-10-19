@@ -253,4 +253,58 @@ public class SmtpEmailService : IEmailService
 
         return EnviarAsync(correoDestino, "Tu contraseña fue cambiada", html, texto);
     }
+
+    public Task<bool> EnviarResultadoSolicitudUnionAsync(string correoDestino, string nombreSolicitante, string nombreFamilia, bool aceptada)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var titulo = aceptada ? "Solicitud de unión aceptada" : "Solicitud de unión rechazada";
+
+        var cuerpo = aceptada
+            ? $"""
+              <p style="color:#4b5563;line-height:1.6">Hola <strong>{nombreSolicitante}</strong>,</p>
+              <p style="color:#4b5563;line-height:1.6">
+                  Tu solicitud para unirte a la familia <strong>{nombreFamilia}</strong> fue
+                  <strong>aceptada</strong>. Inicia sesión para acceder a ella.
+              </p>
+              """
+            : $"""
+              <p style="color:#4b5563;line-height:1.6">Hola <strong>{nombreSolicitante}</strong>,</p>
+              <p style="color:#4b5563;line-height:1.6">
+                  Tu solicitud para unirte a la familia <strong>{nombreFamilia}</strong> fue
+                  <strong>rechazada</strong>. Puedes explorar otras familias desde la aplicación.
+              </p>
+              """;
+
+        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Iniciar sesión");
+
+        var texto = $"RemesaSmart SV - {titulo}: familia {nombreFamilia}.";
+
+        return EnviarAsync(correoDestino, $"{titulo} - RemesaSmart SV", html, texto);
+    }
+
+    public Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var titulo = aceptada ? "Invitación aceptada" : "Invitación rechazada";
+
+        var cuerpo = aceptada
+            ? $"""
+              <p style="color:#4b5563;line-height:1.6">
+                  <strong>{nombreInvitado}</strong> aceptó tu invitación y ya forma parte de la
+                  familia <strong>{nombreFamilia}</strong>.
+              </p>
+              """
+            : $"""
+              <p style="color:#4b5563;line-height:1.6">
+                  <strong>{nombreInvitado}</strong> rechazó tu invitación a la familia
+                  <strong>{nombreFamilia}</strong>.
+              </p>
+              """;
+
+        var html = Plantilla(titulo, cuerpo, aceptada ? $"{baseUrl}/login" : null, "Ver mi familia");
+
+        var texto = $"RemesaSmart SV - {titulo}: {nombreInvitado} y la familia {nombreFamilia}.";
+
+        return EnviarAsync(correoDestino, $"{titulo} - RemesaSmart SV", html, texto);
+    }
 }

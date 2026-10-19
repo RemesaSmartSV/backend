@@ -36,15 +36,32 @@ public class InvitacionesNotificacionesTests : IDisposable
             ["Jwt:Audience"] = "RemesaSmartSVClient",
         }).Build();
 
+    /// <summary>
+    /// Stub de IEmailService que registra cada envío como (destino, asunto) para
+    /// assertar el cableado de notificaciones sin depender del SMTP real.
+    /// </summary>
     private class EmailStub : Services.IEmailService
     {
-        public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token) => Task.FromResult(true);
-        public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token) => Task.FromResult(true);
-        public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje) => Task.FromResult(true);
-        public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado) => Task.FromResult(true);
-        public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje) => Task.FromResult(true);
-        public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen) => Task.FromResult(true);
-        public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc) => Task.FromResult(true);
+        public List<(string Destino, string Asunto)> Enviados { get; } = new();
+
+        public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token)
+        { Enviados.Add((correoDestino, "invitacion-familiar")); return Task.FromResult(true); }
+        public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token)
+        { Enviados.Add((correoDestino, "reset-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje)
+        { Enviados.Add((correoDestino, "alerta-presupuesto")); return Task.FromResult(true); }
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado)
+        { Enviados.Add((correoDestino, "presupuesto-excedido")); return Task.FromResult(true); }
+        public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje)
+        { Enviados.Add((correoDestino, "notificacion-cuenta")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen)
+        { Enviados.Add((correoDestino, "aviso-acceso")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc)
+        { Enviados.Add((correoDestino, "aviso-cambio-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoSolicitudUnionAsync(string correoDestino, string nombreSolicitante, string nombreFamilia, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-solicitud-union")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-invitacion")); return Task.FromResult(true); }
     }
 
     private static InvitacionesController CrearInvitaciones(
@@ -52,9 +69,10 @@ public class InvitacionesNotificacionesTests : IDisposable
         int idUsuario,
         int idHogar,
         string correo,
-        string rol = "Admin")
+        string rol = "Admin",
+        EmailStub? email = null)
     {
-        var controller = new InvitacionesController(db, new AuthService(db, ConfigFalsa()), new EmailStub());
+        var controller = new InvitacionesController(db, new AuthService(db, ConfigFalsa()), email ?? new EmailStub());
         var claims = new List<Claim>
         {
             new("idUsuario", idUsuario.ToString()),
@@ -334,6 +352,88 @@ public class InvitacionesNotificacionesTests : IDisposable
         Assert.Equal(InvitacionFamilia.EstadoRechazada, invitacion.Estado);
         Assert.NotNull(invitacion.FechaRespuesta);
         Assert.Equal(1, await _db.Notificaciones.CountAsync(n => n.IdUsuario == 900));
+    }
+
+    [Fact]
+    public async Task Aceptar_NotificaPorCorreoAlInvitador()
+    {
+        var invitado = await CrearUsuario("ana@gmail.com");
+        var invitador = await CrearUsuario("adminfamilia@gmail.com");
+        await _db.Hogares.AddAsync(new Hogar { NombreFamiliar = "Familia Rivera" });
+        await _db.SaveChangesAsync();
+        var hogar = _db.Hogares.Local.First();
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = hogar.IdHogar,
+            IdInvitador = invitador.IdUsuario,
+            IdInvitado = invitado.IdUsuario,
+            Correo = "ana@gmail.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+        };
+        _db.InvitacionesFamilia.Add(invitacion);
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@gmail.com", rol: "Miembro", email: email);
+        var resultado = await controller.Aceptar(invitacion.IdInvitacion);
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("adminfamilia@gmail.com", enviado.Destino);
+        Assert.Equal("resultado-invitacion", enviado.Asunto);
+    }
+
+    [Fact]
+    public async Task Rechazar_NotificaPorCorreoAlInvitador()
+    {
+        var invitado = await CrearUsuario("ana@gmail.com");
+        var invitador = await CrearUsuario("adminfamilia@gmail.com");
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = invitador.IdUsuario,
+            IdInvitado = invitado.IdUsuario,
+            Correo = "ana@gmail.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+        };
+        _db.InvitacionesFamilia.Add(invitacion);
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = CrearInvitaciones(_db, invitado.IdUsuario, idHogar: 0, correo: "ana@gmail.com", rol: "Miembro", email: email);
+        var resultado = await controller.Rechazar(invitacion.IdInvitacion);
+
+        Assert.IsType<NoContentResult>(resultado);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("adminfamilia@gmail.com", enviado.Destino);
+        Assert.Equal("resultado-invitacion", enviado.Asunto);
+    }
+
+    [Fact]
+    public async Task Reenviar_VuelveAEnviarElCorreoDeInvitacion()
+    {
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 1,
+            Correo = "ana@gmail.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+            FechaEnvio = DateTime.UtcNow.AddDays(-5),
+        };
+        await _db.InvitacionesFamilia.AddAsync(invitacion);
+        await CrearUsuario("adminfamilia@gmail.com", idHogar: 1, rol: "Admin");
+        await _db.Hogares.AddAsync(new Hogar { IdHogar = 1, NombreFamiliar = "Familia Rivera" });
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = CrearInvitaciones(_db, idUsuario: 1, idHogar: 1, correo: "admin@gmail.com", rol: "Admin", email: email);
+        var resultado = await controller.Reenviar(invitacion.IdInvitacion);
+
+        Assert.IsType<NoContentResult>(resultado);
+        // Antes del fix solo se actualizaba la fecha; ahora reenvía el correo.
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("ana@gmail.com", enviado.Destino);
+        Assert.Equal("invitacion-familiar", enviado.Asunto);
     }
 
     // ---------- Notificaciones ----------

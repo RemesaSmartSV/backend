@@ -94,6 +94,10 @@ public class AuthFlujoTests : IDisposable
         { Enviados.Add((correoDestino, "aviso-acceso")); return Task.FromResult(true); }
         public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc)
         { Enviados.Add((correoDestino, "aviso-cambio-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoSolicitudUnionAsync(string correoDestino, string nombreSolicitante, string nombreFamilia, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-solicitud-union")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-invitacion")); return Task.FromResult(true); }
     }
 
     [Fact]

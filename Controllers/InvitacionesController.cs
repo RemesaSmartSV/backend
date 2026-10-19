@@ -193,6 +193,18 @@ public class InvitacionesController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        // Aviso al invitador (fire-and-forget): la respuesta ya quedó persistida.
+        var invitador = await _db.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.IdUsuario == invitacion.IdInvitador);
+        if (invitador is not null)
+        {
+            var nombreFamilia = await _db.Hogares.AsNoTracking()
+                .Where(h => h.IdHogar == invitacion.IdHogar)
+                .Select(h => h.NombreFamiliar)
+                .FirstOrDefaultAsync() ?? "una familia";
+            _ = _email.EnviarResultadoInvitacionAsync(invitador.Correo, nombreFamilia, usuario.Nombre, aceptada: true);
+        }
+
         return Ok(_authService.BuildLoginResponse(usuario));
     }
 
@@ -233,6 +245,20 @@ public class InvitacionesController : ControllerBase
         });
 
         await _db.SaveChangesAsync();
+
+        // Aviso al invitador (fire-and-forget): la respuesta ya quedó persistida.
+        var invitador = await _db.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.IdUsuario == invitacion.IdInvitador);
+        var invitado = await _db.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        if (invitador is not null && invitado is not null)
+        {
+            var nombreFamilia = await _db.Hogares.AsNoTracking()
+                .Where(h => h.IdHogar == invitacion.IdHogar)
+                .Select(h => h.NombreFamiliar)
+                .FirstOrDefaultAsync() ?? "una familia";
+            _ = _email.EnviarResultadoInvitacionAsync(invitador.Correo, nombreFamilia, invitado.Nombre, aceptada: false);
+        }
         return NoContent();
     }
 
@@ -272,6 +298,17 @@ public class InvitacionesController : ControllerBase
 
         invitacion.FechaEnvio = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        // Reenviar debe reenviar el correo: antes solo actualizaba la fecha.
+        var nombreHogar = await _db.Hogares.AsNoTracking()
+            .Where(h => h.IdHogar == invitacion.IdHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+        var nombreInvitador = await _db.Usuarios.AsNoTracking()
+            .Where(u => u.IdUsuario == invitacion.IdInvitador)
+            .Select(u => u.Nombre)
+            .FirstOrDefaultAsync() ?? "Alguien";
+        _ = _email.EnviarInvitacionFamiliarAsync(invitacion.Correo, nombreHogar, nombreInvitador, invitacion.IdInvitacion.ToString());
         return NoContent();
     }
 

@@ -14,4 +14,6 @@ public interface IEmailService
     Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje);
     Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen);
     Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc);
+    Task<bool> EnviarResultadoSolicitudUnionAsync(string correoDestino, string nombreSolicitante, string nombreFamilia, bool aceptada);
+    Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada);
 }

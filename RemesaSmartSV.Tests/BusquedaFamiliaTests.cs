@@ -43,6 +43,34 @@ public class BusquedaFamiliaTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
+    /// <summary>
+    /// Stub de IEmailService que registra cada envío como (destino, asunto) para
+    /// assertar el cableado de notificaciones sin depender del SMTP real.
+    /// </summary>
+    private class EmailRegistrador : IEmailService
+    {
+        public List<(string Destino, string Asunto)> Enviados { get; } = new();
+
+        public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token)
+        { Enviados.Add((correoDestino, "invitacion-familiar")); return Task.FromResult(true); }
+        public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token)
+        { Enviados.Add((correoDestino, "reset-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje)
+        { Enviados.Add((correoDestino, "alerta-presupuesto")); return Task.FromResult(true); }
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado)
+        { Enviados.Add((correoDestino, "presupuesto-excedido")); return Task.FromResult(true); }
+        public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje)
+        { Enviados.Add((correoDestino, "notificacion-cuenta")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen)
+        { Enviados.Add((correoDestino, "aviso-acceso")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc)
+        { Enviados.Add((correoDestino, "aviso-cambio-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoSolicitudUnionAsync(string correoDestino, string nombreSolicitante, string nombreFamilia, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-solicitud-union")); return Task.FromResult(true); }
+        public Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada)
+        { Enviados.Add((correoDestino, "resultado-invitacion")); return Task.FromResult(true); }
+    }
+
     /// <summary>Asigna los claims de prueba a un controller ya construido.</summary>
     private static void AsignarClaims(ControllerBase controller, int idUsuario, int? idHogarClaim)
     {
@@ -64,9 +92,9 @@ public class BusquedaFamiliaTests : IDisposable
         return controller;
     }
 
-    private SolicitudesUnionController Solicitudes(int idUsuario, int? idHogarClaim)
+    private SolicitudesUnionController Solicitudes(int idUsuario, int? idHogarClaim, EmailRegistrador? email = null)
     {
-        var controller = new SolicitudesUnionController(_db);
+        var controller = new SolicitudesUnionController(_db, email ?? new EmailRegistrador());
         AsignarClaims(controller, idUsuario, idHogarClaim);
         return controller;
     }
@@ -280,6 +308,50 @@ public class BusquedaFamiliaTests : IDisposable
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains("codigoPublico", bad.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task AceptarSolicitud_NotificaPorCorreoAlSolicitante()
+    {
+        SembrarHogar(7, "Familia Rivera");
+        SembrarUsuario(1, idHogar: null, "solicitante@gmail.com");
+        SembrarUsuario(2, idHogar: 7, "admin@gmail.com");
+        _db.Usuarios.First(u => u.IdUsuario == 2).Rol = "Admin";
+        var solicitud = new SolicitudUnion { IdHogar = 7, IdUsuario = 1, Estado = SolicitudUnion.Pendiente };
+        _db.SolicitudesUnion.Add(solicitud);
+        _db.SaveChanges();
+
+        var email = new EmailRegistrador();
+        var controller = Solicitudes(2, 7, email);
+
+        var result = await controller.Aceptar(solicitud.IdSolicitud);
+
+        Assert.IsType<NoContentResult>(result);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("solicitante@gmail.com", enviado.Destino);
+        Assert.Equal("resultado-solicitud-union", enviado.Asunto);
+    }
+
+    [Fact]
+    public async Task RechazarSolicitud_NotificaPorCorreoAlSolicitante()
+    {
+        SembrarHogar(7, "Familia Rivera");
+        SembrarUsuario(1, idHogar: null, "solicitante@gmail.com");
+        SembrarUsuario(2, idHogar: 7, "admin@gmail.com");
+        _db.Usuarios.First(u => u.IdUsuario == 2).Rol = "Admin";
+        var solicitud = new SolicitudUnion { IdHogar = 7, IdUsuario = 1, Estado = SolicitudUnion.Pendiente };
+        _db.SolicitudesUnion.Add(solicitud);
+        _db.SaveChanges();
+
+        var email = new EmailRegistrador();
+        var controller = Solicitudes(2, 7, email);
+
+        var result = await controller.Rechazar(solicitud.IdSolicitud);
+
+        Assert.IsType<NoContentResult>(result);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("solicitante@gmail.com", enviado.Destino);
+        Assert.Equal("resultado-solicitud-union", enviado.Asunto);
     }
 
     // ------------------------------------------------------------------

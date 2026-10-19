@@ -24,6 +24,8 @@ public class MovimientosFiltroUsuarioTests : IDisposable
         public Task<bool> EnviarNotificacionCuentaAsync(string a, string b, string c) => Task.FromResult(true);
         public Task<bool> EnviarAvisoAccesoAsync(string a, DateTime b, string? c) => Task.FromResult(true);
         public Task<bool> EnviarAvisoCambioContrasenaAsync(string a, DateTime b) => Task.FromResult(true);
+        public Task<bool> EnviarResultadoSolicitudUnionAsync(string a, string b, string c, bool d) => Task.FromResult(true);
+        public Task<bool> EnviarResultadoInvitacionAsync(string a, string b, string c, bool d) => Task.FromResult(true);
     }
 
     public MovimientosFiltroUsuarioTests()

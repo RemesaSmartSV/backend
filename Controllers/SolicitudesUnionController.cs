@@ -17,8 +17,13 @@ namespace RemesaSmartSV.Controllers;
 public class SolicitudesUnionController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly IEmailService _email;
 
-    public SolicitudesUnionController(ApplicationDbContext db) => _db = db;
+    public SolicitudesUnionController(ApplicationDbContext db, IEmailService email)
+    {
+        _db = db;
+        _email = email;
+    }
 
     /// <summary>Envía una solicitud para unirse a una familia, identificada por su código público o por su id.</summary>
     /// <remarks>El cuerpo debe traer exactamente uno de los dos campos: <c>codigoPublico</c> (flujo de código)
@@ -224,6 +229,13 @@ public class SolicitudesUnionController : ControllerBase
         });
         await _db.SaveChangesAsync();
         if (transaction is not null) await transaction.CommitAsync();
+
+        // Aviso al solicitante (fire-and-forget): el resultado ya quedó persistido.
+        var nombreFamilia = await _db.Hogares.AsNoTracking()
+            .Where(h => h.IdHogar == admin.IdHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+        _ = _email.EnviarResultadoSolicitudUnionAsync(solicitante.Correo, solicitante.Nombre, nombreFamilia, aceptada: true);
         return NoContent();
     }
 
@@ -252,6 +264,18 @@ public class SolicitudesUnionController : ControllerBase
             IdReferencia = id,
         });
         await _db.SaveChangesAsync();
+
+        // Aviso al solicitante (fire-and-forget): el resultado ya quedó persistido.
+        var solicitante = await _db.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.IdUsuario == solicitud.IdUsuario);
+        if (solicitante is not null)
+        {
+            var nombreFamilia = await _db.Hogares.AsNoTracking()
+                .Where(h => h.IdHogar == admin.IdHogar)
+                .Select(h => h.NombreFamiliar)
+                .FirstOrDefaultAsync() ?? "una familia";
+            _ = _email.EnviarResultadoSolicitudUnionAsync(solicitante.Correo, solicitante.Nombre, nombreFamilia, aceptada: false);
+        }
         return NoContent();
     }
 
