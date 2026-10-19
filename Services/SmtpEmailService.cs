@@ -49,9 +49,15 @@ public class SmtpEmailService : IEmailService
         }
         catch (Exception ex)
         {
-            // No registrar destinatario, asunto, cuerpo ni excepción SMTP: pueden
-            // contener PII, enlaces con tokens o detalles del proveedor.
-            _logger.LogError("Error al enviar correo. Tipo de excepción: {ExceptionType}", ex.GetType().Name);
+            // No registrar destinatario, asunto, cuerpo ni credenciales: pueden
+            // contener PII, enlaces con tokens o detalles del proveedor. El
+            // SmtpStatusCode (enum, ej. 535) y el tipo de la inner exception sí
+            // son seguros y son los que permiten diagnosticar el fallo real.
+            var codigoSmtp = ex is SmtpException smtpEx ? smtpEx.StatusCode.ToString() : "n/a";
+            var tipoInterna = ex.InnerException?.GetType().Name ?? "ninguna";
+            _logger.LogError(
+                "Error al enviar correo. Tipo de excepción: {ExceptionType}. SmtpStatusCode: {SmtpStatusCode}. Inner: {InnerExceptionType}",
+                ex.GetType().Name, codigoSmtp, tipoInterna);
             return false;
         }
     }
