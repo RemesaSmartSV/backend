@@ -205,4 +205,52 @@ public class SmtpEmailService : IEmailService
 
         return EnviarAsync(correoDestino, asunto, html, texto);
     }
+
+    public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen)
+    {
+        var fecha = $"{fechaUtc:dd/MM/yyyy HH:mm} UTC";
+        var origenLinea = string.IsNullOrWhiteSpace(origen)
+            ? """<p style="margin:5px 0;color:#4b5563"><strong>Origen:</strong> no disponible</p>"""
+            : $"""<p style="margin:5px 0;color:#4b5563"><strong>Origen:</strong> {origen}</p>""";
+
+        var cuerpo = $"""
+            <p style="color:#4b5563;line-height:1.6">
+                Detectamos un <strong>nuevo acceso</strong> a tu cuenta de RemesaSmart SV.
+            </p>
+            <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:20px 0">
+                <p style="margin:5px 0;color:#4b5563"><strong>Fecha y hora:</strong> {fecha}</p>
+                {origenLinea}
+            </div>
+            <p style="color:#4b5563;line-height:1.6">Si este acceso lo hiciste tú, ignora este correo.</p>
+            """;
+
+        var html = Plantilla("Nuevo acceso a tu cuenta", cuerpo);
+
+        var texto = $"RemesaSmart SV - Nuevo acceso a tu cuenta el {fecha}.";
+
+        return EnviarAsync(correoDestino, "Nuevo acceso a tu cuenta", html, texto);
+    }
+
+    public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc)
+    {
+        var fecha = $"{fechaUtc:dd/MM/yyyy HH:mm} UTC";
+
+        var cuerpo = $"""
+            <p style="color:#4b5563;line-height:1.6">
+                La contraseña de tu cuenta de RemesaSmart SV fue cambiada correctamente.
+            </p>
+            <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:20px 0">
+                <p style="margin:5px 0;color:#4b5563"><strong>Fecha y hora:</strong> {fecha}</p>
+            </div>
+            <p style="color:#4b5563;line-height:1.6">
+                Si no fuiste tú, restablece tu contraseña de inmediato desde la aplicación.
+            </p>
+            """;
+
+        var html = Plantilla("Tu contraseña fue cambiada", cuerpo);
+
+        var texto = $"RemesaSmart SV - Tu contraseña fue cambiada el {fecha}.";
+
+        return EnviarAsync(correoDestino, "Tu contraseña fue cambiada", html, texto);
+    }
 }

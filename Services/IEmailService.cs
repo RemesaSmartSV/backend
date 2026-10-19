@@ -12,4 +12,6 @@ public interface IEmailService
     Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje);
     Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado);
     Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje);
+    Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen);
+    Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc);
 }

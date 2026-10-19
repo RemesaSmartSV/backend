@@ -64,8 +64,15 @@ public class AuthController : ControllerBase
         var result = await _auth.LoginAsync(request);
         if (result is null)
             return Unauthorized(new { message = "Credenciales incorrectas." });
+
+        // Aviso de seguridad (fire-and-forget): no debe demorar ni tumbar el login.
+        _ = _email.EnviarAvisoAccesoAsync(result.Correo, DateTime.UtcNow, OrigenConexion());
         return Ok(result);
     }
+
+    // IP de la conexión; puede ser null (proxy sin IP aparente o test unitario).
+    private string? OrigenConexion()
+        => HttpContext.Connection.RemoteIpAddress?.ToString();
 
     /// <summary>Emite un JWT actualizado a partir de la membresía real del usuario.</summary>
     [HttpPost("refrescar-sesion")]
@@ -223,6 +230,10 @@ public class AuthController : ControllerBase
         }
 
         var result = _auth.BuildLoginResponse(usuario);
+
+        // Aviso de seguridad (fire-and-forget): un ingreso con Google también
+        // cuenta como nuevo acceso a la cuenta.
+        _ = _email.EnviarAvisoAccesoAsync(usuario.Correo, DateTime.UtcNow, OrigenConexion());
         return Ok(result);
     }
 }

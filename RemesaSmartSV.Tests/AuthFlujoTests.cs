@@ -72,6 +72,30 @@ public class AuthFlujoTests : IDisposable
         return usuario;
     }
 
+    /// <summary>
+    /// Stub de IEmailService que registra cada envío como (destino, asunto) para
+    /// assertar el cableado de notificaciones sin depender del SMTP real.
+    /// </summary>
+    private class EmailRegistrador : IEmailService
+    {
+        public List<(string Destino, string Asunto)> Enviados { get; } = new();
+
+        public Task<bool> EnviarInvitacionFamiliarAsync(string correoDestino, string nombreFamilia, string nombreInvitador, string token)
+        { Enviados.Add((correoDestino, "invitacion-familiar")); return Task.FromResult(true); }
+        public Task<bool> EnviarResetContrasenaAsync(string correoDestino, string token)
+        { Enviados.Add((correoDestino, "reset-contrasena")); return Task.FromResult(true); }
+        public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje)
+        { Enviados.Add((correoDestino, "alerta-presupuesto")); return Task.FromResult(true); }
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado)
+        { Enviados.Add((correoDestino, "presupuesto-excedido")); return Task.FromResult(true); }
+        public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje)
+        { Enviados.Add((correoDestino, "notificacion-cuenta")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen)
+        { Enviados.Add((correoDestino, "aviso-acceso")); return Task.FromResult(true); }
+        public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc)
+        { Enviados.Add((correoDestino, "aviso-cambio-contrasena")); return Task.FromResult(true); }
+    }
+
     [Fact]
     public async Task RegisterAsync_CreaUsuarioSinHogarYSinRol()
     {
@@ -224,7 +248,7 @@ public class AuthFlujoTests : IDisposable
         _db.Usuarios.Add(usuario);
         await _db.SaveChangesAsync();
 
-        var controller = new UsuariosController(_db, new AuthService(_db, _config));
+        var controller = new UsuariosController(_db, new AuthService(_db, _config), new EmailRegistrador());
         AsignarClaims(controller, usuario.IdUsuario, hogar.IdHogar);
 
         var result = await controller.ActualizarPerfil(new ActualizarPerfilRequest
@@ -257,7 +281,7 @@ public class AuthFlujoTests : IDisposable
     public async Task UsuariosController_ActualizarIdioma_PersisteIdiomaSoportado()
     {
         var usuario = await CrearUsuarioSinHogarAsync();
-        var controller = new UsuariosController(_db, CrearAuthService());
+        var controller = new UsuariosController(_db, CrearAuthService(), new EmailRegistrador());
         AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
 
         var result = await controller.ActualizarIdioma(new ActualizarIdiomaRequest { IdiomaPreferido = "EN" });
@@ -270,7 +294,7 @@ public class AuthFlujoTests : IDisposable
     public async Task UsuariosController_ActualizarIdioma_RechazaIdiomaNoSoportado()
     {
         var usuario = await CrearUsuarioSinHogarAsync();
-        var controller = new UsuariosController(_db, CrearAuthService());
+        var controller = new UsuariosController(_db, CrearAuthService(), new EmailRegistrador());
         AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
 
         var result = await controller.ActualizarIdioma(new ActualizarIdiomaRequest { IdiomaPreferido = "fr" });
@@ -293,7 +317,7 @@ public class AuthFlujoTests : IDisposable
             FechaRegistro = DateTime.UtcNow,
         });
         await _db.SaveChangesAsync();
-        var controller = new UsuariosController(_db, CrearAuthService());
+        var controller = new UsuariosController(_db, CrearAuthService(), new EmailRegistrador());
         AsignarClaims(controller, idUsuario: 1, idHogarClaim: 7);
 
         var resultado = await controller.AddMember(
@@ -353,7 +377,7 @@ public class AuthFlujoTests : IDisposable
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 
-        var controller = new UsuariosController(db, new AuthService(db, _config));
+        var controller = new UsuariosController(db, new AuthService(db, _config), new EmailRegistrador());
         var claims = new List<System.Security.Claims.Claim> { new("idUsuario", admin.IdUsuario.ToString()), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
@@ -377,7 +401,7 @@ public class AuthFlujoTests : IDisposable
         db.Usuarios.Add(admin);
         await db.SaveChangesAsync();
 
-        var controller = new UsuariosController(db, new AuthService(db, _config));
+        var controller = new UsuariosController(db, new AuthService(db, _config), new EmailRegistrador());
         var claims = new List<System.Security.Claims.Claim> { new("idUsuario", admin.IdUsuario.ToString()), new("idHogar", "1"), new(System.Security.Claims.ClaimTypes.Role, "Admin") };
         controller.ControllerContext = new Microsoft.AspNetCore.Mvc.ControllerContext
         {
@@ -419,5 +443,94 @@ public class AuthFlujoTests : IDisposable
         Assert.Null(respuesta);
         // La política bloquea el acceso pero conserva el registro y sus datos.
         Assert.True(await _db.Usuarios.AnyAsync(u => u.IdUsuario == usuario.IdUsuario));
+    }
+
+    // ---------- Avisos de correo del sistema de notificaciones ----------
+
+    [Fact]
+    public async Task Login_Exitoso_DisparaAvisoDeAccesoAlCorreoDelUsuario()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        usuario.ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>()
+            .HashPassword(usuario, "ClaveSegura123");
+        await _db.SaveChangesAsync();
+
+        var email = new EmailRegistrador();
+        var controller = new AuthController(CrearAuthService(), _db, email, _config, new GoogleNonceStore());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var resultado = await controller.Login(new LoginRequest("ana@gmail.com", "ClaveSegura123"));
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("ana@gmail.com", enviado.Destino);
+        Assert.Equal("aviso-acceso", enviado.Asunto);
+    }
+
+    [Fact]
+    public async Task Login_CredencialesInvalidas_NoDisparaAvisoDeAcceso()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        // Hash real de otra contraseña: VerifyHashedPassword debe fallar limpio.
+        usuario.ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>()
+            .HashPassword(usuario, "ClaveSegura123");
+        await _db.SaveChangesAsync();
+
+        var email = new EmailRegistrador();
+        var controller = new AuthController(CrearAuthService(), _db, email, _config, new GoogleNonceStore());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var resultado = await controller.Login(new LoginRequest("ana@gmail.com", "ClaveIncorrecta123"));
+
+        Assert.IsType<UnauthorizedObjectResult>(resultado.Result);
+        Assert.Empty(email.Enviados);
+    }
+
+    [Fact]
+    public async Task CambiarContrasena_Exitoso_DisparaAvisoPorCorreo()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>();
+        usuario.ContrasenaHash = hasher.HashPassword(usuario, "ClaveSegura123");
+        await _db.SaveChangesAsync();
+
+        var email = new EmailRegistrador();
+        var controller = new UsuariosController(_db, CrearAuthService(), email);
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var resultado = await controller.CambiarContrasena(new CambiarContrasenaRequest
+        {
+            ContrasenaActual = "ClaveSegura123",
+            NuevaContrasena = "NuevaClave456",
+            ConfirmarNueva = "NuevaClave456",
+        });
+
+        Assert.IsType<NoContentResult>(resultado);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("ana@gmail.com", enviado.Destino);
+        Assert.Equal("aviso-cambio-contrasena", enviado.Asunto);
+    }
+
+    [Fact]
+    public async Task CambiarContrasena_ClaveActualIncorrecta_NoDisparaAviso()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>();
+        usuario.ContrasenaHash = hasher.HashPassword(usuario, "ClaveSegura123");
+        await _db.SaveChangesAsync();
+
+        var email = new EmailRegistrador();
+        var controller = new UsuariosController(_db, CrearAuthService(), email);
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var resultado = await controller.CambiarContrasena(new CambiarContrasenaRequest
+        {
+            ContrasenaActual = "ClaveErronea123",
+            NuevaContrasena = "NuevaClave456",
+            ConfirmarNueva = "NuevaClave456",
+        });
+
+        Assert.IsType<BadRequestObjectResult>(resultado);
+        Assert.Empty(email.Enviados);
     }
 }

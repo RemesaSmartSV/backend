@@ -43,6 +43,8 @@ public class InvitacionesNotificacionesTests : IDisposable
         public Task<bool> EnviarAlertaPresupuestoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado, decimal porcentaje) => Task.FromResult(true);
         public Task<bool> EnviarPresupuestoExcedidoAsync(string correoDestino, string nombreUsuario, string nombrePresupuesto, decimal montoLimite, decimal montoGastado) => Task.FromResult(true);
         public Task<bool> EnviarNotificacionCuentaAsync(string correoDestino, string asunto, string mensaje) => Task.FromResult(true);
+        public Task<bool> EnviarAvisoAccesoAsync(string correoDestino, DateTime fechaUtc, string? origen) => Task.FromResult(true);
+        public Task<bool> EnviarAvisoCambioContrasenaAsync(string correoDestino, DateTime fechaUtc) => Task.FromResult(true);
     }
 
     private static InvitacionesController CrearInvitaciones(

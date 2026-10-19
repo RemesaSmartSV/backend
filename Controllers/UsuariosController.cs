@@ -17,11 +17,13 @@ public class UsuariosController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     private readonly AuthService _authService;
+    private readonly IEmailService _email;
 
-    public UsuariosController(ApplicationDbContext db, AuthService authService)
+    public UsuariosController(ApplicationDbContext db, AuthService authService, IEmailService email)
     {
         _db = db;
         _authService = authService;
+        _email = email;
     }
 
     /// <summary>Obtiene los miembros del hogar del usuario actual.</summary>
@@ -261,6 +263,9 @@ public class UsuariosController : ControllerBase
         usuario.ResetToken = null;
         usuario.ResetTokenExpiry = null;
         await _db.SaveChangesAsync();
+
+        // Aviso de seguridad (fire-and-forget): el cambio ya quedó persistido.
+        _ = _email.EnviarAvisoCambioContrasenaAsync(usuario.Correo, DateTime.UtcNow);
         return NoContent();
     }
 

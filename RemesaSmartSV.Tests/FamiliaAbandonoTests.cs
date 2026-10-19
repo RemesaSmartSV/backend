@@ -41,9 +41,21 @@ public class FamiliaAbandonoTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
+    // Solo para inyectar IEmailService: abandonar familia no envía correos.
+    private class EmailStub : IEmailService
+    {
+        public Task<bool> EnviarInvitacionFamiliarAsync(string a, string b, string c, string d) => Task.FromResult(true);
+        public Task<bool> EnviarResetContrasenaAsync(string a, string b) => Task.FromResult(true);
+        public Task<bool> EnviarAlertaPresupuestoAsync(string a, string b, string c, decimal d, decimal e, decimal f) => Task.FromResult(true);
+        public Task<bool> EnviarPresupuestoExcedidoAsync(string a, string b, string c, decimal d, decimal e) => Task.FromResult(true);
+        public Task<bool> EnviarNotificacionCuentaAsync(string a, string b, string c) => Task.FromResult(true);
+        public Task<bool> EnviarAvisoAccesoAsync(string a, DateTime b, string? c) => Task.FromResult(true);
+        public Task<bool> EnviarAvisoCambioContrasenaAsync(string a, DateTime b) => Task.FromResult(true);
+    }
+
     private UsuariosController CrearController(int idUsuario)
     {
-        var controller = new UsuariosController(_db, new AuthService(_db, _config));
+        var controller = new UsuariosController(_db, new AuthService(_db, _config), new EmailStub());
 
         var claims = new List<Claim> { new("idUsuario", idUsuario.ToString()) };
         var identity = new ClaimsIdentity(claims, "Test");
