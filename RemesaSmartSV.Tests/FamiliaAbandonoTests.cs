@@ -41,7 +41,8 @@ public class FamiliaAbandonoTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    // Solo para inyectar IEmailService: abandonar familia no envía correos.
+    // Stub pasivo de IEmailService: abandonar familia avisa por correo a los
+    // miembros restantes; esos envíos se verifican en CorreosFamiliaTests.
     private class EmailStub : IEmailService
     {
         public Task<bool> EnviarInvitacionFamiliarAsync(string a, string b, string c, string d) => Task.FromResult(true);

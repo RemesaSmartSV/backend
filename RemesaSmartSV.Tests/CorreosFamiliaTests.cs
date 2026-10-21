@@ -11,8 +11,9 @@ using RemesaSmartSV.Services;
 namespace RemesaSmartSV.Tests;
 
 /// <summary>
-/// Pruebas del fan-out de correos de la familia cuando se registra un
-/// movimiento compartido. Se verifican destinatarios y tipo de aviso con un
+/// Pruebas del fan-out de correos a la familia: movimientos registrados,
+/// altas de miembros (invitación y solicitud de unión) y bajas
+/// (abandonar familia). Se verifican destinatarios y tipo de aviso con un
 /// stub que captura cada envío como (Destino, Asunto).
 /// </summary>
 public class CorreosFamiliaTests : IDisposable
@@ -178,5 +179,97 @@ public class CorreosFamiliaTests : IDisposable
         // generar ningún aviso de movimiento.
         await Task.Delay(300);
         Assert.Empty(email.Enviados);
+    }
+
+    // ---------- Altas y bajas de miembros ----------
+
+    [Fact]
+    public async Task AceptarInvitacion_EnviaCorreoDeUnionATodosLosMiembros()
+    {
+        SembrarMiembro(1, idHogar: null, "invitado@gmail.com", "Invitado");
+        SembrarMiembro(2, 1, "anfitrion@gmail.com", "Anfitrion");
+        _db.Hogares.Add(new Hogar { IdHogar = 1, NombreFamiliar = "Familia Rivera" });
+        var invitacion = new InvitacionFamilia
+        {
+            IdHogar = 1,
+            IdInvitador = 2,
+            IdInvitado = 1,
+            Correo = "invitado@gmail.com",
+            Estado = InvitacionFamilia.EstadoPendiente,
+        };
+        _db.InvitacionesFamilia.Add(invitacion);
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = new InvitacionesController(_db, new AuthService(_db, _config), email);
+        AsignarClaims(controller,
+            ("idUsuario", "1"),
+            ("idHogar", "0"),
+            (ClaimTypes.Role, "Miembro"),
+            (ClaimTypes.Email, "invitado@gmail.com"));
+
+        var resultado = await controller.Aceptar(invitacion.IdInvitacion);
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+
+        var envios = await EsperarEnviosAsync(email, 3);
+        var uniones = envios.Where(e => e.Asunto == "union-familia").ToList();
+        Assert.Equal(2, uniones.Count);
+        Assert.Equal(
+            new[] { "anfitrion@gmail.com", "invitado@gmail.com" },
+            uniones.Select(e => e.Destino).OrderBy(d => d, StringComparer.Ordinal).ToList());
+        // El invitador también recibe el resultado de su invitación.
+        Assert.Contains(envios, e => e.Asunto == "resultado-invitacion" && e.Destino == "anfitrion@gmail.com");
+    }
+
+    [Fact]
+    public async Task AceptarSolicitud_EnviaCorreoDeUnionATodosLosMiembros()
+    {
+        SembrarMiembro(1, idHogar: null, "solicitante@gmail.com", "Solicitante");
+        SembrarMiembro(2, 1, "admin@gmail.com", "Admin", rol: "Admin");
+        _db.Hogares.Add(new Hogar { IdHogar = 1, NombreFamiliar = "Familia Rivera" });
+        var solicitud = new SolicitudUnion { IdHogar = 1, IdUsuario = 1, Estado = SolicitudUnion.Pendiente };
+        _db.SolicitudesUnion.Add(solicitud);
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = new SolicitudesUnionController(_db, email);
+        AsignarClaims(controller, ("idUsuario", "2"), ("idHogar", "1"), (ClaimTypes.Role, "Admin"));
+
+        var resultado = await controller.Aceptar(solicitud.IdSolicitud);
+
+        Assert.IsType<NoContentResult>(resultado);
+
+        var envios = await EsperarEnviosAsync(email, 3);
+        var uniones = envios.Where(e => e.Asunto == "union-familia").ToList();
+        Assert.Equal(2, uniones.Count);
+        Assert.Equal(
+            new[] { "admin@gmail.com", "solicitante@gmail.com" },
+            uniones.Select(e => e.Destino).OrderBy(d => d, StringComparer.Ordinal).ToList());
+        // El solicitante también recibe el resultado de su solicitud.
+        Assert.Contains(envios, e => e.Asunto == "resultado-solicitud-union" && e.Destino == "solicitante@gmail.com");
+    }
+
+    [Fact]
+    public async Task AbandonarFamilia_EnviaCorreoDeSalidaALosRestantesSinAlQueSeVa()
+    {
+        SembrarMiembro(1, 1, "sale@gmail.com", "Sale");
+        SembrarMiembro(2, 1, "queda@gmail.com", "Queda");
+        _db.Hogares.Add(new Hogar { IdHogar = 1, NombreFamiliar = "Familia Rivera" });
+        await _db.SaveChangesAsync();
+
+        var email = new EmailStub();
+        var controller = new UsuariosController(_db, new AuthService(_db, _config), email);
+        AsignarClaims(controller, ("idUsuario", "1"));
+
+        var resultado = await controller.AbandonarFamilia();
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+
+        var envios = await EsperarEnviosAsync(email, 1);
+        var salidas = envios.Where(e => e.Asunto == "salida-familia").ToList();
+        var salida = Assert.Single(salidas);
+        Assert.Equal("queda@gmail.com", salida.Destino);
+        Assert.DoesNotContain(envios, e => e.Destino == "sale@gmail.com");
     }
 }

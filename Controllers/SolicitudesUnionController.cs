@@ -236,6 +236,12 @@ public class SolicitudesUnionController : ControllerBase
             .Select(h => h.NombreFamiliar)
             .FirstOrDefaultAsync() ?? "una familia";
         _ = _email.EnviarResultadoSolicitudUnionAsync(solicitante.Correo, solicitante.Nombre, nombreFamilia, aceptada: true);
+
+        // Aviso de la nueva incorporación a todos los miembros del hogar,
+        // incluida la persona que se acaba de unir (fire-and-forget).
+        if (admin.IdHogar is int idHogarAlta)
+            _ = NotificarUnionFamiliaAsync(idHogarAlta, nombreFamilia, solicitante.Nombre);
+
         return NoContent();
     }
 
@@ -307,4 +313,28 @@ public class SolicitudesUnionController : ControllerBase
         => exception.InnerException is PostgresException postgres
            && postgres.SqlState == PostgresErrorCodes.UniqueViolation
            && postgres.ConstraintName == "IX_SolicitudesUnion_IdHogar_IdUsuario";
+
+    /// <summary>Avisa por correo a todos los miembros del hogar que una persona se unió a la familia.</summary>
+    private async Task NotificarUnionFamiliaAsync(int idHogar, string nombreFamilia, string nombrePersona)
+    {
+        try
+        {
+            if (idHogar <= 0)
+                return;
+
+            var miembros = await _db.Usuarios
+                .AsNoTracking()
+                .Where(u => u.IdHogar == idHogar)
+                .ToListAsync();
+
+            foreach (var miembro in miembros)
+            {
+                await _email.EnviarUnionFamiliaAsync(miembro.Correo, nombreFamilia, nombrePersona);
+            }
+        }
+        catch
+        {
+            // El aviso de unión no debe bloquear el alta del miembro.
+        }
+    }
 }

@@ -291,15 +291,50 @@ public class UsuariosController : ControllerBase
         if (usuario.IdHogar is null or 0)
             return BadRequest(new { message = "No perteneces a ninguna familia." });
 
+        // Se capturan antes de la mutación: después, el usuario ya no pertenece al hogar.
+        var idHogar = usuario.IdHogar!.Value;
+        var nombrePersona = usuario.Nombre;
+        var nombreFamilia = await _db.Hogares.AsNoTracking()
+            .Where(h => h.IdHogar == idHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+
         usuario.IdHogar = null;
         usuario.Rol = null;
         await _db.SaveChangesAsync();
+
+        // Aviso a los miembros restantes (fire-and-forget): la baja ya quedó persistida.
+        _ = NotificarSalidaFamiliaAsync(idHogar, nombreFamilia, nombrePersona);
 
         // Si la familia se quedó sin miembros, el hogar NO se elimina: conserva
         // todos sus datos financieros por requisito (§6.3 Caso A). Las FK hacia
         // Hogar son RESTRICT a nivel de base de datos, así que ninguna cascada
         // destructiva puede borrarlos.
         return Ok(_authService.BuildLoginResponse(usuario));
+    }
+
+    /// <summary>
+    /// Avisa por correo a los miembros restantes del hogar que una persona salió
+    /// de la familia. Quien se fue no recibe el aviso: ya conoce la acción.
+    /// </summary>
+    private async Task NotificarSalidaFamiliaAsync(int idHogar, string nombreFamilia, string nombrePersona)
+    {
+        try
+        {
+            var miembros = await _db.Usuarios
+                .AsNoTracking()
+                .Where(u => u.IdHogar == idHogar)
+                .ToListAsync();
+
+            foreach (var miembro in miembros)
+            {
+                await _email.EnviarSalidaFamiliaAsync(miembro.Correo, nombreFamilia, nombrePersona);
+            }
+        }
+        catch
+        {
+            // El aviso de salida no debe bloquear la baja de la familia.
+        }
     }
 
     private Task<Usuario?> UsuarioActualAsync()

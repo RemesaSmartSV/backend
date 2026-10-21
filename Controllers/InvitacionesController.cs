@@ -193,17 +193,22 @@ public class InvitacionesController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        var nombreFamilia = await _db.Hogares.AsNoTracking()
+            .Where(h => h.IdHogar == invitacion.IdHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+
         // Aviso al invitador (fire-and-forget): la respuesta ya quedó persistida.
         var invitador = await _db.Usuarios.AsNoTracking()
             .FirstOrDefaultAsync(u => u.IdUsuario == invitacion.IdInvitador);
         if (invitador is not null)
         {
-            var nombreFamilia = await _db.Hogares.AsNoTracking()
-                .Where(h => h.IdHogar == invitacion.IdHogar)
-                .Select(h => h.NombreFamiliar)
-                .FirstOrDefaultAsync() ?? "una familia";
             _ = _email.EnviarResultadoInvitacionAsync(invitador.Correo, nombreFamilia, usuario.Nombre, aceptada: true);
         }
+
+        // Aviso de la nueva incorporación a todos los miembros del hogar,
+        // incluida la persona que se acaba de unir (fire-and-forget).
+        _ = NotificarUnionFamiliaAsync(invitacion.IdHogar, nombreFamilia, usuario.Nombre);
 
         return Ok(_authService.BuildLoginResponse(usuario));
     }
@@ -319,4 +324,28 @@ public class InvitacionesController : ControllerBase
         => exception.InnerException is PostgresException postgres
            && postgres.SqlState == PostgresErrorCodes.UniqueViolation
            && postgres.ConstraintName == "IX_InvitacionesFamilia_IdHogar_Correo";
+
+    /// <summary>Avisa por correo a todos los miembros del hogar que una persona se unió a la familia.</summary>
+    private async Task NotificarUnionFamiliaAsync(int idHogar, string nombreFamilia, string nombrePersona)
+    {
+        try
+        {
+            if (idHogar <= 0)
+                return;
+
+            var miembros = await _db.Usuarios
+                .AsNoTracking()
+                .Where(u => u.IdHogar == idHogar)
+                .ToListAsync();
+
+            foreach (var miembro in miembros)
+            {
+                await _email.EnviarUnionFamiliaAsync(miembro.Correo, nombreFamilia, nombrePersona);
+            }
+        }
+        catch
+        {
+            // El aviso de unión no debe bloquear el alta del miembro.
+        }
+    }
 }

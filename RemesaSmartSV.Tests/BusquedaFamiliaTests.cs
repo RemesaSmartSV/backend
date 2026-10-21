@@ -333,7 +333,9 @@ public class BusquedaFamiliaTests : IDisposable
         var result = await controller.Aceptar(solicitud.IdSolicitud);
 
         Assert.IsType<NoContentResult>(result);
-        var enviado = Assert.Single(email.Enviados);
+        // El alta también manda el correo de unión a los miembros del hogar;
+        // aquí se verifica el resultado de la solicitud para el solicitante.
+        var enviado = Assert.Single(email.Enviados.Where(e => e.Asunto == "resultado-solicitud-union"));
         Assert.Equal("solicitante@gmail.com", enviado.Destino);
         Assert.Equal("resultado-solicitud-union", enviado.Asunto);
     }

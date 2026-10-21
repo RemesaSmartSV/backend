@@ -384,7 +384,9 @@ public class InvitacionesNotificacionesTests : IDisposable
         var resultado = await controller.Aceptar(invitacion.IdInvitacion);
 
         Assert.IsType<OkObjectResult>(resultado.Result);
-        var enviado = Assert.Single(email.Enviados);
+        // El alta también manda el correo de unión a los miembros del hogar;
+        // aquí se verifica el resultado de la invitación para el invitador.
+        var enviado = Assert.Single(email.Enviados.Where(e => e.Asunto == "resultado-invitacion"));
         Assert.Equal("adminfamilia@gmail.com", enviado.Destino);
         Assert.Equal("resultado-invitacion", enviado.Asunto);
     }
