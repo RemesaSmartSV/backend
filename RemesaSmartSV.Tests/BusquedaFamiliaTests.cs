@@ -69,6 +69,12 @@ public class BusquedaFamiliaTests : IDisposable
         { Enviados.Add((correoDestino, "resultado-solicitud-union")); return Task.FromResult(true); }
         public Task<bool> EnviarResultadoInvitacionAsync(string correoDestino, string nombreFamilia, string nombreInvitado, bool aceptada)
         { Enviados.Add((correoDestino, "resultado-invitacion")); return Task.FromResult(true); }
+        public Task<bool> EnviarMovimientoFamiliaAsync(string correoDestino, string nombreDestino, string nombreAutor, string tipoMovimiento, decimal monto, string? descripcion, DateTime fecha)
+        { Enviados.Add((correoDestino, "movimiento-familia")); return Task.FromResult(true); }
+        public Task<bool> EnviarUnionFamiliaAsync(string correoDestino, string nombreFamilia, string nombrePersona)
+        { Enviados.Add((correoDestino, "union-familia")); return Task.FromResult(true); }
+        public Task<bool> EnviarSalidaFamiliaAsync(string correoDestino, string nombreFamilia, string nombrePersona)
+        { Enviados.Add((correoDestino, "salida-familia")); return Task.FromResult(true); }
     }
 
     /// <summary>Asigna los claims de prueba a un controller ya construido.</summary>

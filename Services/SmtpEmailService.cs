@@ -338,4 +338,85 @@ public class SmtpEmailService : IEmailService
 
         return EnviarAsync(correoDestino, $"{titulo} - RemesaSmart SV", html, texto);
     }
+
+    public Task<bool> EnviarMovimientoFamiliaAsync(string correoDestino, string nombreDestino, string nombreAutor, string tipoMovimiento, decimal monto, string? descripcion, DateTime fecha)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var enlace = $"{baseUrl}/movimientos";
+        var fechaTexto = $"{fecha:dd/MM/yyyy HH:mm}";
+        var descripcionLinea = string.IsNullOrWhiteSpace(descripcion)
+            ? string.Empty
+            : $"""<p style="margin:5px 0;color:#4b5563"><strong>Descripción:</strong> {descripcion}</p>""";
+
+        var cuerpo = $"""
+            <p style="color:#4b5563;line-height:1.6">Hola <strong>{nombreDestino}</strong>,</p>
+            <p style="color:#4b5563;line-height:1.6">
+                <strong>{nombreAutor}</strong> registró un <strong>{tipoMovimiento}</strong> de
+                <strong>${monto:F2}</strong> en la actividad de la familia.
+            </p>
+            <div style="background:#f9fafb;padding:16px;border-radius:8px;margin:20px 0">
+                <p style="margin:5px 0;color:#4b5563"><strong>Fecha:</strong> {fechaTexto}</p>
+                <p style="margin:5px 0;color:#4b5563"><strong>Tipo:</strong> {tipoMovimiento}</p>
+                <p style="margin:5px 0;color:#4b5563"><strong>Monto:</strong> ${monto:F2}</p>
+                {descripcionLinea}
+            </div>
+            """;
+
+        var asunto = $"{nombreAutor} registró un {tipoMovimiento} de ${monto:F2}";
+
+        var html = Plantilla("Nuevo movimiento en la familia", cuerpo, enlace, "Ver movimientos",
+            icono: "💸", preheader: asunto);
+
+        var texto = $"RemesaSmart SV - {asunto}.";
+
+        return EnviarAsync(correoDestino, asunto, html, texto);
+    }
+
+    public Task<bool> EnviarUnionFamiliaAsync(string correoDestino, string nombreFamilia, string nombrePersona)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var enlace = $"{baseUrl}/login";
+
+        var cuerpo = $"""
+            <p style="color:#4b5563;line-height:1.6">
+                <strong>{nombrePersona}</strong> se unió a la familia <strong>{nombreFamilia}</strong>.
+            </p>
+            <p style="color:#6b7280;font-size:13px">
+                Ya forma parte de la actividad compartida de la familia en RemesaSmart SV.
+            </p>
+            """;
+
+        var asunto = $"{nombrePersona} se unió a la familia {nombreFamilia}";
+
+        var html = Plantilla("Nuevo miembro en la familia", cuerpo, enlace, "Ver mi familia",
+            icono: "🎉", preheader: asunto);
+
+        var texto = $"RemesaSmart SV - {asunto}.";
+
+        return EnviarAsync(correoDestino, asunto, html, texto);
+    }
+
+    public Task<bool> EnviarSalidaFamiliaAsync(string correoDestino, string nombreFamilia, string nombrePersona)
+    {
+        var baseUrl = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+        var enlace = $"{baseUrl}/login";
+
+        var cuerpo = $"""
+            <p style="color:#4b5563;line-height:1.6">
+                <strong>{nombrePersona}</strong> salió de la familia <strong>{nombreFamilia}</strong>.
+            </p>
+            <p style="color:#6b7280;font-size:13px">
+                Los datos financieros de la familia se conservan sin cambios.
+            </p>
+            """;
+
+        var asunto = $"{nombrePersona} salió de la familia {nombreFamilia}";
+
+        var html = Plantilla("Un miembro salió de la familia", cuerpo, enlace, "Ver mi familia",
+            icono: "👋", preheader: asunto);
+
+        var texto = $"RemesaSmart SV - {asunto}.";
+
+        return EnviarAsync(correoDestino, asunto, html, texto);
+    }
 }

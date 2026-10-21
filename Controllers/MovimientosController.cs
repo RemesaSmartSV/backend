@@ -192,7 +192,48 @@ public class MovimientosController : ControllerBase
             _ = VerificarAlertaPresupuesto(movimiento);
         }
 
+        // Aviso a la familia: cada miembro del hogar recibe el detalle del
+        // movimiento recién registrado (incluye a quien lo registra).
+        _ = NotificarMovimientoAFamiliaAsync(movimiento);
+
         return CreatedAtAction(nameof(GetMovimiento), new { id = movimiento.IdMovimiento }, movimiento);
+    }
+
+    /// <summary>
+    /// Envía un correo a cada miembro del hogar con el detalle del movimiento
+    /// recién registrado. No avisa para los espejos de un aporte
+    /// (<see cref="EsMovimientoEspejoAporte"/>): son generados por el sistema y
+    /// duplicarían el aviso. Tampoco avisa si el movimiento no tiene hogar.
+    /// </summary>
+    private async Task NotificarMovimientoAFamiliaAsync(Movimiento movimiento)
+    {
+        try
+        {
+            if (movimiento.IdHogar <= 0 || EsMovimientoEspejoAporte(movimiento))
+                return;
+
+            var autor = await _db.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.IdUsuario == movimiento.IdUsuario);
+            if (autor is null)
+                return;
+
+            var miembros = await _db.Usuarios
+                .AsNoTracking()
+                .Where(u => u.IdHogar == movimiento.IdHogar)
+                .ToListAsync();
+
+            foreach (var miembro in miembros)
+            {
+                await _email.EnviarMovimientoFamiliaAsync(
+                    miembro.Correo, miembro.Nombre, autor.Nombre,
+                    movimiento.Tipo, movimiento.Monto, movimiento.Descripcion, movimiento.Fecha);
+            }
+        }
+        catch
+        {
+            // El aviso a la familia no debe bloquear la operación financiera.
+        }
     }
 
     private async Task VerificarAlertaPresupuesto(Movimiento movimiento)

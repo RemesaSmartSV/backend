@@ -31,6 +31,9 @@ public class MovimientosResumenTests : IDisposable
         public Task<bool> EnviarAvisoCambioContrasenaAsync(string a, DateTime b) => Task.FromResult(true);
         public Task<bool> EnviarResultadoSolicitudUnionAsync(string a, string b, string c, bool d) => Task.FromResult(true);
         public Task<bool> EnviarResultadoInvitacionAsync(string a, string b, string c, bool d) => Task.FromResult(true);
+        public Task<bool> EnviarMovimientoFamiliaAsync(string a, string b, string c, string d, decimal e, string? f, DateTime g) => Task.FromResult(true);
+        public Task<bool> EnviarUnionFamiliaAsync(string a, string b, string c) => Task.FromResult(true);
+        public Task<bool> EnviarSalidaFamiliaAsync(string a, string b, string c) => Task.FromResult(true);
     }
 
     public MovimientosResumenTests()
