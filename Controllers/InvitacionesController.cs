@@ -207,8 +207,11 @@ public class InvitacionesController : ControllerBase
         }
 
         // Aviso de la nueva incorporación a todos los miembros del hogar,
-        // incluida la persona que se acaba de unir (fire-and-forget).
-        _ = NotificarUnionFamiliaAsync(invitacion.IdHogar, nombreFamilia, usuario.Nombre);
+        // incluida la persona que se acaba de unir. Los destinatarios se
+        // materializan dentro del scope de la request; solo el envío corre
+        // fuera de ella (fire-and-forget).
+        var miembrosHogar = await PrepararAvisoUnionFamiliaAsync(invitacion.IdHogar);
+        _ = NotificarUnionFamiliaAsync(miembrosHogar, nombreFamilia, usuario.Nombre);
 
         return Ok(_authService.BuildLoginResponse(usuario));
     }
@@ -325,22 +328,42 @@ public class InvitacionesController : ControllerBase
            && postgres.SqlState == PostgresErrorCodes.UniqueViolation
            && postgres.ConstraintName == "IX_InvitacionesFamilia_IdHogar_Correo";
 
-    /// <summary>Avisa por correo a todos los miembros del hogar que una persona se unió a la familia.</summary>
-    private async Task NotificarUnionFamiliaAsync(int idHogar, string nombreFamilia, string nombrePersona)
+    /// <summary>
+    /// Materializa, dentro del scope de la request, los correos de los miembros
+    /// del hogar. Devuelve una lista vacía si el hogar no existe o la consulta
+    /// falla.
+    /// </summary>
+    private async Task<List<string>> PrepararAvisoUnionFamiliaAsync(int idHogar)
     {
         try
         {
             if (idHogar <= 0)
-                return;
+                return new List<string>();
 
-            var miembros = await _db.Usuarios
+            return await _db.Usuarios
                 .AsNoTracking()
                 .Where(u => u.IdHogar == idHogar)
+                .Select(u => u.Correo)
                 .ToListAsync();
+        }
+        catch
+        {
+            // La consulta del aviso no debe bloquear el alta del miembro.
+            return new List<string>();
+        }
+    }
 
-            foreach (var miembro in miembros)
+    /// <summary>
+    /// Avisa por correo a los miembros del hogar que una persona se unió a la
+    /// familia. No toca el DbContext: corre fuera del scope de la request.
+    /// </summary>
+    private async Task NotificarUnionFamiliaAsync(List<string> correos, string nombreFamilia, string nombrePersona)
+    {
+        try
+        {
+            foreach (var correo in correos)
             {
-                await _email.EnviarUnionFamiliaAsync(miembro.Correo, nombreFamilia, nombrePersona);
+                await _email.EnviarUnionFamiliaAsync(correo, nombreFamilia, nombrePersona);
             }
         }
         catch

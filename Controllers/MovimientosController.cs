@@ -186,48 +186,100 @@ public class MovimientosController : ControllerBase
         await _db.SaveChangesAsync();
 
         // Alerta de presupuesto: si es un gasto y cruza el 80% o 100% del límite,
-        // envía correo (una vez por cruce, no por cada movimiento).
+        // envía correo (una vez por cruce, no por cada movimiento). Los datos se
+        // materializan dentro del scope de la request: la etapa de envío corre
+        // fuera de ella (fire-and-forget) y no toca el DbContext.
         if (movimiento.Tipo == "Gasto" && movimiento.IdCategoria > 0)
         {
-            _ = VerificarAlertaPresupuesto(movimiento);
+            var alertaPresupuesto = await PrepararAlertaPresupuestoAsync(movimiento);
+            if (alertaPresupuesto is not null)
+                _ = VerificarAlertaPresupuesto(alertaPresupuesto);
         }
 
         // Aviso a la familia: cada miembro del hogar recibe el detalle del
-        // movimiento recién registrado (incluye a quien lo registra).
-        _ = NotificarMovimientoAFamiliaAsync(movimiento);
+        // movimiento recién registrado (incluye a quien lo registra). Los
+        // destinatarios se materializan aquí, dentro del scope de la request.
+        var avisoMovimiento = await PrepararAvisoMovimientoAsync(movimiento);
+        if (avisoMovimiento is not null)
+            _ = NotificarMovimientoAFamiliaAsync(avisoMovimiento);
 
         return CreatedAtAction(nameof(GetMovimiento), new { id = movimiento.IdMovimiento }, movimiento);
     }
 
+    /// <summary>Datos ya materializados del aviso de movimiento. La etapa de envío
+    /// corre fuera del scope de la request y no debe tocar el DbContext.</summary>
+    private sealed record AvisoMovimiento(
+        List<(string Correo, string Nombre)> Destinatarios,
+        string NombreAutor,
+        string TipoMovimiento,
+        decimal Monto,
+        string? Descripcion,
+        DateTime Fecha);
+
+    /// <summary>Datos ya materializados de la alerta de presupuesto. La etapa de
+    /// envío corre fuera del scope de la request y no debe tocar el DbContext.</summary>
+    private sealed record AlertaPresupuesto(
+        string CorreoDestino,
+        string NombreUsuario,
+        string NombrePresupuesto,
+        decimal MontoLimite,
+        decimal MontoGastado,
+        decimal Porcentaje,
+        bool Excedido);
+
     /// <summary>
-    /// Envía un correo a cada miembro del hogar con el detalle del movimiento
-    /// recién registrado. No avisa para los espejos de un aporte
-    /// (<see cref="EsMovimientoEspejoAporte"/>): son generados por el sistema y
-    /// duplicarían el aviso. Tampoco avisa si el movimiento no tiene hogar.
+    /// Materializa, dentro del scope de la request, los destinatarios y los datos
+    /// del aviso de movimiento. Devuelve null cuando no hay aviso que enviar:
+    /// movimiento sin hogar, espejo de un aporte
+    /// (<see cref="EsMovimientoEspejoAporte"/>) o autor inexistente.
     /// </summary>
-    private async Task NotificarMovimientoAFamiliaAsync(Movimiento movimiento)
+    private async Task<AvisoMovimiento?> PrepararAvisoMovimientoAsync(Movimiento movimiento)
     {
         try
         {
             if (movimiento.IdHogar <= 0 || EsMovimientoEspejoAporte(movimiento))
-                return;
+                return null;
 
             var autor = await _db.Usuarios
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.IdUsuario == movimiento.IdUsuario);
             if (autor is null)
-                return;
+                return null;
 
             var miembros = await _db.Usuarios
                 .AsNoTracking()
                 .Where(u => u.IdHogar == movimiento.IdHogar)
+                .Select(u => new { u.Correo, u.Nombre })
                 .ToListAsync();
 
-            foreach (var miembro in miembros)
+            return new AvisoMovimiento(
+                miembros.Select(m => (m.Correo, m.Nombre)).ToList(),
+                autor.Nombre,
+                movimiento.Tipo,
+                movimiento.Monto,
+                movimiento.Descripcion,
+                movimiento.Fecha);
+        }
+        catch
+        {
+            // La consulta del aviso no debe bloquear la operación financiera.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Envía el aviso de movimiento a los destinatarios ya materializados. No
+    /// toca el DbContext: corre fuera del scope de la request.
+    /// </summary>
+    private async Task NotificarMovimientoAFamiliaAsync(AvisoMovimiento aviso)
+    {
+        try
+        {
+            foreach (var (correo, nombre) in aviso.Destinatarios)
             {
                 await _email.EnviarMovimientoFamiliaAsync(
-                    miembro.Correo, miembro.Nombre, autor.Nombre,
-                    movimiento.Tipo, movimiento.Monto, movimiento.Descripcion, movimiento.Fecha);
+                    correo, nombre, aviso.NombreAutor,
+                    aviso.TipoMovimiento, aviso.Monto, aviso.Descripcion, aviso.Fecha);
             }
         }
         catch
@@ -236,7 +288,12 @@ public class MovimientosController : ControllerBase
         }
     }
 
-    private async Task VerificarAlertaPresupuesto(Movimiento movimiento)
+    /// <summary>
+    /// Materializa, dentro del scope de la request, los datos de la alerta de
+    /// presupuesto. Devuelve null cuando no hay alerta: sin presupuesto para la
+    /// categoría y el mes, sin usuario o sin cruce de umbral.
+    /// </summary>
+    private async Task<AlertaPresupuesto?> PrepararAlertaPresupuestoAsync(Movimiento movimiento)
     {
         try
         {
@@ -247,7 +304,7 @@ public class MovimientosController : ControllerBase
                     && p.IdCategoria == movimiento.IdCategoria
                     && p.MesAnio == mesAnio);
 
-            if (presupuesto is null) return;
+            if (presupuesto is null) return null;
 
             var gastado = await _db.Movimientos
                 .AsNoTracking()
@@ -266,21 +323,52 @@ public class MovimientosController : ControllerBase
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.IdUsuario == movimiento.IdUsuario);
 
-            if (usuario is null) return;
+            if (usuario is null) return null;
 
             if (gastado > presupuesto.MontoLimite)
             {
-                await _email.EnviarPresupuestoExcedidoAsync(
+                return new AlertaPresupuesto(
                     usuario.Correo, usuario.Nombre,
                     presupuesto.Categoria?.Nombre ?? "Presupuesto",
-                    presupuesto.MontoLimite, gastado);
+                    presupuesto.MontoLimite, gastado, porcentaje, Excedido: true);
             }
-            else if (porcentaje >= 80)
+
+            if (porcentaje >= 80)
+            {
+                return new AlertaPresupuesto(
+                    usuario.Correo, usuario.Nombre,
+                    presupuesto.Categoria?.Nombre ?? "Presupuesto",
+                    presupuesto.MontoLimite, gastado, porcentaje, Excedido: false);
+            }
+
+            return null;
+        }
+        catch
+        {
+            // La consulta de la alerta no debe bloquear la operación financiera.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Envía la alerta de presupuesto con los datos ya materializados. No toca
+    /// el DbContext: corre fuera del scope de la request.
+    /// </summary>
+    private async Task VerificarAlertaPresupuesto(AlertaPresupuesto alerta)
+    {
+        try
+        {
+            if (alerta.Excedido)
+            {
+                await _email.EnviarPresupuestoExcedidoAsync(
+                    alerta.CorreoDestino, alerta.NombreUsuario,
+                    alerta.NombrePresupuesto, alerta.MontoLimite, alerta.MontoGastado);
+            }
+            else if (alerta.Porcentaje >= 80)
             {
                 await _email.EnviarAlertaPresupuestoAsync(
-                    usuario.Correo, usuario.Nombre,
-                    presupuesto.Categoria?.Nombre ?? "Presupuesto",
-                    presupuesto.MontoLimite, gastado, porcentaje);
+                    alerta.CorreoDestino, alerta.NombreUsuario,
+                    alerta.NombrePresupuesto, alerta.MontoLimite, alerta.MontoGastado, alerta.Porcentaje);
             }
         }
         catch

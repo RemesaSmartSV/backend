@@ -303,8 +303,11 @@ public class UsuariosController : ControllerBase
         usuario.Rol = null;
         await _db.SaveChangesAsync();
 
-        // Aviso a los miembros restantes (fire-and-forget): la baja ya quedó persistida.
-        _ = NotificarSalidaFamiliaAsync(idHogar, nombreFamilia, nombrePersona);
+        // Aviso a los miembros restantes: los destinatarios se materializan
+        // dentro del scope de la request; solo el envío corre fuera de ella
+        // (fire-and-forget), ya con la baja persistida.
+        var miembrosRestantes = await PrepararAvisoSalidaFamiliaAsync(idHogar);
+        _ = NotificarSalidaFamiliaAsync(miembrosRestantes, nombreFamilia, nombrePersona);
 
         // Si la familia se quedó sin miembros, el hogar NO se elimina: conserva
         // todos sus datos financieros por requisito (§6.3 Caso A). Las FK hacia
@@ -314,21 +317,38 @@ public class UsuariosController : ControllerBase
     }
 
     /// <summary>
-    /// Avisa por correo a los miembros restantes del hogar que una persona salió
-    /// de la familia. Quien se fue no recibe el aviso: ya conoce la acción.
+    /// Materializa, dentro del scope de la request, los correos de los miembros
+    /// restantes del hogar. Devuelve una lista vacía si la consulta falla.
     /// </summary>
-    private async Task NotificarSalidaFamiliaAsync(int idHogar, string nombreFamilia, string nombrePersona)
+    private async Task<List<string>> PrepararAvisoSalidaFamiliaAsync(int idHogar)
     {
         try
         {
-            var miembros = await _db.Usuarios
+            return await _db.Usuarios
                 .AsNoTracking()
                 .Where(u => u.IdHogar == idHogar)
+                .Select(u => u.Correo)
                 .ToListAsync();
+        }
+        catch
+        {
+            // La consulta del aviso no debe bloquear la baja de la familia.
+            return new List<string>();
+        }
+    }
 
-            foreach (var miembro in miembros)
+    /// <summary>
+    /// Avisa por correo a los miembros restantes del hogar que una persona salió
+    /// de la familia. Quien se fue no recibe el aviso: ya conoce la acción. No
+    /// toca el DbContext: corre fuera del scope de la request.
+    /// </summary>
+    private async Task NotificarSalidaFamiliaAsync(List<string> correos, string nombreFamilia, string nombrePersona)
+    {
+        try
+        {
+            foreach (var correo in correos)
             {
-                await _email.EnviarSalidaFamiliaAsync(miembro.Correo, nombreFamilia, nombrePersona);
+                await _email.EnviarSalidaFamiliaAsync(correo, nombreFamilia, nombrePersona);
             }
         }
         catch
