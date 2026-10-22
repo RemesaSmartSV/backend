@@ -10,6 +10,14 @@
   </PropertyGroup>
 
   <!--
+    Los builders de correos (Plantilla, Construir*) son internal para poder
+    testear el HTML renderizado sin exponerlos en la API publica.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="RemesaSmartSV.Tests" />
+  </ItemGroup>
+
+  <!--
     Excluir TODO el proyecto de pruebas de los globs por defecto, no solo el codigo.
     Si solo se excluye Compile, los archivos de RemesaSmartSV.Tests\bin\** entran como
     Content/None, se copian de forma transitiva a la salida del proyecto de pruebas y se
