@@ -38,3 +38,6 @@ scripts/backup_*.sql
 .env
 .env.*
 !.env.example
+
+# Indice local de CodeGraph (tooling, no se versiona)
+.codegraph/
