@@ -1,6 +1,9 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Mail;
+using System.Net.Mime;
+using System.Reflection;
+using System.Text;
 
 namespace RemesaSmartSV.Services;
 
@@ -34,15 +37,7 @@ public class SmtpEmailService : IEmailService
                 EnableSsl = true,
             };
 
-            var mensaje = new MailMessage
-            {
-                From = new MailAddress(smtpUser, "RemesaSmart SV"),
-                Subject = asunto,
-                Body = cuerpoHtml,
-                IsBodyHtml = true,
-            };
-            mensaje.To.Add(destino);
-            mensaje.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(cuerpoTexto, null, "text/plain"));
+            using var mensaje = ConstruirMensaje(smtpUser, destino, asunto, cuerpoHtml, cuerpoTexto);
 
             await cliente.SendMailAsync(mensaje);
             _logger.LogInformation("Correo enviado correctamente.");
@@ -61,6 +56,57 @@ public class SmtpEmailService : IEmailService
                 ex.GetType().Name, codigoSmtp, tipoInterna);
             return false;
         }
+    }
+
+    // -----------------------------------------------------------------
+    // Ensamblado del MailMessage multipart.
+    // El logo viaja como LinkedResource (CID) dentro del propio correo:
+    // los clientes bloquean imágenes remotas por defecto, así que el HTML
+    // no referencia ninguna URL externa. internal para poder testear el
+    // mensaje sin enviar correos.
+    // -----------------------------------------------------------------
+
+    /// <summary>Content-ID del logo embebido; el HTML lo referencia como cid:logo.</summary>
+    internal const string LogoContentId = "logo";
+
+    /// <summary>Nombre del recurso embebido del logo (RootNamespace + carpeta + archivo).</summary>
+    internal const string LogoRecurso = "RemesaSmartSV.Assets.logo_remesa_blanco.png";
+
+    /// <summary>
+    /// Abre el stream del logo embebido en el ensamblado. Si el recurso no
+    /// está registrado se lanza: un correo sin logo contradice el diseño.
+    /// </summary>
+    internal static Stream AbrirStreamLogo()
+    {
+        var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(LogoRecurso);
+        return stream ?? throw new InvalidOperationException($"Recurso embebido ausente: {LogoRecurso}.");
+    }
+
+    /// <summary>
+    /// Arma el <see cref="MailMessage"/> multipart real: vista text/plain
+    /// (cuerpo legible sin HTML) y vista text/html con el logo vinculado vía
+    /// CID. No se usa Body/IsBodyHtml: con AlternateViews esa propiedad se
+    /// ignora y solo ensucia el mensaje.
+    /// </summary>
+    internal static MailMessage ConstruirMensaje(string remitente, string destino, string asunto, string cuerpoHtml, string cuerpoTexto)
+    {
+        var mensaje = new MailMessage
+        {
+            From = new MailAddress(remitente, "RemesaSmart SV"),
+            Subject = asunto,
+        };
+        mensaje.To.Add(destino);
+        mensaje.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(cuerpoTexto, Encoding.UTF8, "text/plain"));
+
+        var vistaHtml = AlternateView.CreateAlternateViewFromString(cuerpoHtml, Encoding.UTF8, "text/html");
+        vistaHtml.LinkedResources.Add(new LinkedResource(AbrirStreamLogo(), "image/png")
+        {
+            ContentId = LogoContentId,
+            TransferEncoding = TransferEncoding.Base64,
+        });
+        mensaje.AlternateViews.Add(vistaHtml);
+
+        return mensaje;
     }
 
     // -----------------------------------------------------------------
@@ -88,7 +134,7 @@ public class SmtpEmailService : IEmailService
     /// Plantilla base compartida por todos los correos. Diseño transaccional
     /// robusto multi-cliente: DOCTYPE + meta viewport / color-scheme, estructura
     /// de tablas <c>role="presentation"</c> (Outlook deforma los divs), estilos
-    /// 100% inline, preheader oculto, header con marca tipográfica, tarjeta con
+    /// 100% inline, preheader oculto, header con logo de marca embebido (CID), tarjeta con
     /// contenido, CTA opcional y footer con capa de confianza (mensaje
     /// automático + aviso anti-phishing). Outlook ignora max-width, sombras y
     /// border-radius: se acepta degradación progresiva.
@@ -147,8 +193,8 @@ public class SmtpEmailService : IEmailService
                         <td align="center" style="padding:24px 12px">
                             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;margin:0 auto;border-collapse:collapse">
                                 <tr>
-                                    <td style="background:#123B8F;padding:30px 24px;text-align:center;border-radius:16px 16px 0 0">
-                                        <div style="font-family:{fuente};font-size:24px;font-weight:700;color:#ffffff;letter-spacing:.5px">RemesaSmart SV</div>
+                                    <td style="background:#123B8F;padding:12px 24px 16px;text-align:center;border-radius:16px 16px 0 0">
+                                        <img src="cid:logo" alt="RemesaSmart SV" width="360" height="240" style="display:block;margin:0 auto;width:360px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;color:#ffffff;font-family:{fuente};font-size:15px;font-weight:700">
                                         <div style="font-family:{fuente};font-size:11px;color:#a9c1f0;text-transform:uppercase;letter-spacing:2px;margin-top:8px">Finanzas familiares y remesas</div>
                                     </td>
                                 </tr>

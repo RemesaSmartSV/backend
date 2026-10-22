@@ -18,6 +18,15 @@
   </ItemGroup>
 
   <!--
+    Logo de marca embebido en el ensamblado. Los correos lo adjuntan como
+    LinkedResource (CID) desde el stream del recurso: los clientes de correo
+    bloquean imagenes remotas, asi que no se referencia ninguna URL externa.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\logo_remesa_blanco.png" />
+  </ItemGroup>
+
+  <!--
     Excluir TODO el proyecto de pruebas de los globs por defecto, no solo el codigo.
     Si solo se excluye Compile, los archivos de RemesaSmartSV.Tests\bin\** entran como
     Content/None, se copian de forma transitiva a la salida del proyecto de pruebas y se
