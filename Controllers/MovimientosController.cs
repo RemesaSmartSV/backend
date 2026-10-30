@@ -35,10 +35,10 @@ public class MovimientosController : ControllerBase
     /// <param name="pageSize">Cantidad de movimientos por página, entre 1 y 100.</param>
     /// <response code="200">Devuelve la página de movimientos que coincide con los filtros.</response>
     /// <response code="400">Los valores de paginación están fuera de los límites permitidos.</response>
-    [ProducesResponseType(typeof(PaginatedResponse<Movimiento>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PaginatedResponse<MovimientoListadoDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [HttpGet]
-    public async Task<ActionResult<PaginatedResponse<Movimiento>>> GetMovimientos(
+    public async Task<ActionResult<PaginatedResponse<MovimientoListadoDto>>> GetMovimientos(
         [FromQuery] int? categoriaId,
         [FromQuery] string? tipo,
         [FromQuery] DateTime? fechaInicio,
@@ -65,13 +65,37 @@ public class MovimientosController : ControllerBase
             query = query.Where(m => m.IdUsuario == usuarioId.Value);
 
         var total = await query.CountAsync();
-        var items = await query
+        var movimientos = await query
             .OrderByDescending(m => m.Fecha)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
 
-        return Ok(new PaginatedResponse<Movimiento>
+        // Autoría visible: se resuelve en una segunda consulta acotada (no más
+        // de pageSize ids). Cubre a los miembros removidos del hogar: su fila
+        // usuario persiste con IdHogar = null. Un id sin fila (imposible con la
+        // FK RESTRICT en producción) degrada a NombreAutor = null sin romper.
+        var idsAutor = movimientos.Select(m => m.IdUsuario).Distinct().ToList();
+        var nombresAutor = await _db.Usuarios.AsNoTracking()
+            .Where(u => idsAutor.Contains(u.IdUsuario))
+            .ToDictionaryAsync(u => u.IdUsuario, u => u.Nombre);
+
+        // Proyección aditiva (superset): mismos campos de la entidad + NombreAutor.
+        var items = movimientos
+            .Select(m => new MovimientoListadoDto(
+                m.IdMovimiento,
+                m.IdHogar,
+                m.IdUsuario,
+                m.IdCategoria,
+                m.Monto,
+                m.Fecha,
+                m.Tipo,
+                m.Descripcion,
+                m.OrigenEmisora,
+                nombresAutor.TryGetValue(m.IdUsuario, out var nombreAutor) ? nombreAutor : null))
+            .ToList();
+
+        return Ok(new PaginatedResponse<MovimientoListadoDto>
         {
             Items = items,
             Total = total,

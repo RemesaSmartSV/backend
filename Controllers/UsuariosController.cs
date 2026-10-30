@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
@@ -188,16 +187,20 @@ public class UsuariosController : ControllerBase
         => string.Equals(rol, "Admin", StringComparison.Ordinal) ||
            string.Equals(rol, "Miembro", StringComparison.Ordinal);
 
-    /// <summary>Elimina un miembro del hogar actual.</summary>
+    /// <summary>Retira un miembro del hogar actual.</summary>
+    /// <remarks>
+    /// El miembro NO se borra: se desvincula del hogar (IdHogar y Rol a null),
+    /// el mismo patrón que abandonar familia. Sus movimientos se conservan con
+    /// la autoría visible para el resto de la familia, que recibe un correo de
+    /// salida. El 409 por movimientos ya no aplica: la fila usuario persiste.
+    /// </remarks>
     /// <param name="id">Identificador del miembro.</param>
-    /// <response code="204">El miembro fue eliminado.</response>
-    /// <response code="400">El usuario actual no puede eliminarse a sí mismo.</response>
+    /// <response code="204">El miembro fue retirado del hogar.</response>
+    /// <response code="400">El usuario actual no puede retirarse a sí mismo o el miembro es el último Admin.</response>
     /// <response code="404">El miembro no existe o no pertenece al hogar.</response>
-    /// <response code="409">El miembro tiene movimientos registrados que se conservan.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
@@ -221,26 +224,29 @@ public class UsuariosController : ControllerBase
                 return BadRequest(new { message = "No puedes eliminar al último administrador del hogar." });
         }
 
-        try
-        {
-            _db.Usuarios.Remove(usuario);
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (EsRestriccionLlaveForanea(ex))
-        {
-            // Requisito §6.3: la FK Movimiento.Usuario es RESTRICT, así que la base
-            // de datos rechaza el borrado y los movimientos siguen intactos.
-            return Conflict(new { message = "No se puede eliminar: el miembro tiene movimientos registrados. Los datos financieros se conservan." });
-        }
+        // Se capturan antes de la mutación: después, el usuario ya no pertenece al hogar.
+        var idHogar = usuario.IdHogar!.Value;
+        var nombrePersona = usuario.Nombre;
+        var nombreFamilia = await _db.Hogares.AsNoTracking()
+            .Where(h => h.IdHogar == idHogar)
+            .Select(h => h.NombreFamiliar)
+            .FirstOrDefaultAsync() ?? "una familia";
+
+        // Baja por detach (mismo patrón que AbandonarFamilia): la fila usuario
+        // persiste para conservar la autoría de sus movimientos (§6.3).
+        usuario.IdHogar = null;
+        usuario.Rol = null;
+        await _db.SaveChangesAsync();
+
+        // Aviso a los miembros restantes (incluido el admin que ejecuta la
+        // baja, consistente con self-leave): los destinatarios se materializan
+        // dentro del scope de la request, ya sin el removido; solo el envío
+        // corre fuera de ella (fire-and-forget), con la baja persistida.
+        var miembrosRestantes = await PrepararAvisoSalidaFamiliaAsync(idHogar);
+        _ = NotificarSalidaFamiliaAsync(miembrosRestantes, nombreFamilia, nombrePersona);
 
         return NoContent();
     }
-
-    // Una FK con DELETE RESTRICT se materializa en PostgreSQL como error 23503
-    // (ForeignKeyViolation), con el PostgresException como inner exception.
-    private static bool EsRestriccionLlaveForanea(DbUpdateException exception)
-        => exception.InnerException is PostgresException postgres
-           && postgres.SqlState == PostgresErrorCodes.ForeignKeyViolation;
 
     /// <summary>Cambia la contraseña del usuario autenticado.</summary>
     /// <response code="204">La contraseña fue actualizada.</response>

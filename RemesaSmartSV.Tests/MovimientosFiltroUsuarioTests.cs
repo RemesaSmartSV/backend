@@ -89,7 +89,8 @@ public class MovimientosFiltroUsuarioTests : IDisposable
             categoriaId: null, tipo: null, fechaInicio: null, fechaFin: null, usuarioId: 2);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var respuesta = Assert.IsType<PaginatedResponse<Movimiento>>(ok.Value);
+        // Contrato aditivo: la respuesta es un DTO superset de la entidad.
+        var respuesta = Assert.IsType<PaginatedResponse<MovimientoListadoDto>>(ok.Value);
 
         Assert.Equal(1, respuesta.Total);
         var movimiento = Assert.Single(respuesta.Items);
@@ -106,7 +107,7 @@ public class MovimientosFiltroUsuarioTests : IDisposable
             categoriaId: null, tipo: null, fechaInicio: null, fechaFin: null, usuarioId: null);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var respuesta = Assert.IsType<PaginatedResponse<Movimiento>>(ok.Value);
+        var respuesta = Assert.IsType<PaginatedResponse<MovimientoListadoDto>>(ok.Value);
 
         Assert.Equal(2, respuesta.Total);
         // Ordenados por Fecha descendente: primero el movimiento más reciente (miembro 2).
