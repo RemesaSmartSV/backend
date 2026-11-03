@@ -61,6 +61,21 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddSingleton<GoogleNonceStore>();
 
+// Consejos financieros por IA (Groq tier free): caché de 2 horas + fallback a
+// los tips de la DB. La config se inyecta desde el entorno (patrón SMTP) para
+// que el servicio no lea variables directamente; sin GROQ_API_KEY la IA queda
+// desactivada y el endpoint sigue funcionando con los tips de la DB.
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton(new ConsejosIaConfig
+{
+    ApiKey = builder.Configuration["GROQ_API_KEY"] ?? string.Empty,
+    Model = builder.Configuration["GROQ_MODEL"] ?? "llama-3.3-70b-versatile"
+});
+// Primer HttpClient del proyecto: patrón typed client con timeout acotado para
+// que un Groq colgado no mantenga la petición del usuario abierta indefinidamente.
+builder.Services.AddHttpClient<IConsejosIaService, ConsejosIaService>(client =>
+    client.Timeout = TimeSpan.FromSeconds(15));
+
 // Filtro global que revalida la membresía vigente contra la BD en cada request
 // autenticado (se resuelve con DI como scoped porque usa ApplicationDbContext).
 builder.Services.AddScoped<TokenVigenciaFilter>();
