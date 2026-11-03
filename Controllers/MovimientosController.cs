@@ -160,6 +160,8 @@ public class MovimientosController : ControllerBase
         }
 
         var csv = new StringBuilder();
+        // BOM UTF-8 para que Excel reconozca acentos correctamente.
+        csv.Append('\uFEFF');
         csv.AppendLine("Id,Fecha,Tipo,Categoria,Monto,Descripcion,Origen");
 
         foreach (var movimiento in movimientos)
