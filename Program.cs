@@ -69,7 +69,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(new ConsejosIaConfig
 {
     ApiKey = builder.Configuration["GROQ_API_KEY"] ?? string.Empty,
-    Model = builder.Configuration["GROQ_MODEL"] ?? "llama-3.3-70b-versatile"
+    Model = builder.Configuration["GROQ_MODEL"] ?? "openai/gpt-oss-120b"
 });
 // Primer HttpClient del proyecto: patrón typed client con timeout acotado para
 // que un Groq colgado no mantenga la petición del usuario abierta indefinidamente.
