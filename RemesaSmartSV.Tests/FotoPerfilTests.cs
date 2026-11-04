@@ -82,7 +82,7 @@ public class FotoPerfilTests : IDisposable
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var respuesta = Assert.IsType<FotoPerfilResponse>(ok.Value);
-        Assert.Equal($"/api/Usuarios/foto/{usuario.IdUsuario}", respuesta.FotoPerfil);
+        Assert.StartsWith($"/api/Usuarios/foto/{usuario.IdUsuario}?v=", respuesta.FotoPerfil);
 
         var guardado = await _db.Usuarios.SingleAsync();
         Assert.Equal(bytes, guardado.FotoArchivo);

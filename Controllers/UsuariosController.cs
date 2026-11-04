@@ -157,7 +157,10 @@ public class UsuariosController : ControllerBase
 
         usuario.FotoArchivo = buffer.ToArray();
         usuario.FotoContentType = contentType;
-        usuario.FotoPerfil = $"/api/Usuarios/foto/{usuario.IdUsuario}";
+        // ?v=<timestamp>: la URL del stream no cambia al reemplazar los bytes,
+        // y el GET se cachea 24h — sin este query el navegador seguiría
+        // mostrando la foto anterior tras una nueva subida.
+        usuario.FotoPerfil = $"/api/Usuarios/foto/{usuario.IdUsuario}?v={DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
         await _db.SaveChangesAsync();
 
         return Ok(new FotoPerfilResponse(usuario.FotoPerfil));
