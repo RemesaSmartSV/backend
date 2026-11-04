@@ -24,6 +24,17 @@ public class Usuario
     [StringLength(500)]
     public string? FotoPerfil { get; set; }
 
+    // Bytes de la foto de perfil (PNG/JPG) alojados en Postgres. Nunca viajan
+    // en una respuesta JSON: se sirven por GET /api/Usuarios/foto/{id}.
+    [JsonIgnore]
+    public byte[]? FotoArchivo { get; set; }
+
+    // MIME guardado junto a los bytes para poder devolver el Content-Type
+    // correcto en el endpoint de streaming (image/png | image/jpeg).
+    [JsonIgnore]
+    [StringLength(50)]
+    public string? FotoContentType { get; set; }
+
     [StringLength(20)]
     public string? Telefono { get; set; }
 

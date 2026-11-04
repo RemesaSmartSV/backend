@@ -491,6 +491,13 @@ namespace RemesaSmartSV.Migrations
                     b.Property<DateTime>("FechaRegistro")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<byte[]>("FotoArchivo")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FotoContentType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("FotoPerfil")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");

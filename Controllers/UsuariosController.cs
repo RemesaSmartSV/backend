@@ -118,6 +118,102 @@ public class UsuariosController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Tamaño máximo admitido para la foto de perfil (5 MB).</summary>
+    private const long TamanioMaximoFotoBytes = 5 * 1024 * 1024;
+
+    /// <summary>
+    /// Sube la foto de perfil del usuario autenticado (multipart, campo <c>archivo</c>).
+    /// Los bytes se guardan en Postgres y <c>FotoPerfil</c> queda apuntando al
+    /// endpoint de streaming <c>/api/Usuarios/foto/{id}</c>, que es lo que el
+    /// cliente usa en el <c>src</c> de la imagen.
+    /// </summary>
+    /// <param name="archivo">Imagen PNG o JPG, máximo 5 MB.</param>
+    /// <response code="200">La foto fue guardada; devuelve la ruta a servir.</response>
+    /// <response code="400">Falta el archivo, supera el tamaño o el tipo no está permitido.</response>
+    /// <response code="404">El usuario autenticado no existe.</response>
+    [RequestSizeLimit(TamanioMaximoFotoBytes + 512 * 1024)]
+    [ProducesResponseType(typeof(FotoPerfilResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpPost("foto")]
+    public async Task<ActionResult> SubirFoto([FromForm] IFormFile? archivo)
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        if (archivo is null || archivo.Length == 0)
+            return BadRequest(new { message = "Debes seleccionar una imagen." });
+
+        if (archivo.Length > TamanioMaximoFotoBytes)
+            return BadRequest(new { message = "La imagen no puede superar 5 MB." });
+
+        var contentType = archivo.ContentType?.Trim().ToLowerInvariant();
+        if (contentType is not ("image/png" or "image/jpeg"))
+            return BadRequest(new { message = "Solo se admiten imágenes PNG o JPG." });
+
+        using var buffer = new MemoryStream();
+        await archivo.CopyToAsync(buffer);
+
+        usuario.FotoArchivo = buffer.ToArray();
+        usuario.FotoContentType = contentType;
+        usuario.FotoPerfil = $"/api/Usuarios/foto/{usuario.IdUsuario}";
+        await _db.SaveChangesAsync();
+
+        return Ok(new FotoPerfilResponse(usuario.FotoPerfil));
+    }
+
+    /// <summary>Sirve los bytes de la foto de perfil de un usuario.</summary>
+    /// <remarks>
+    /// Anónimo a propósito: el navegador pide la imagen con un <c>&lt;img&gt;</c>
+    /// y no lleva el header de autorización. Solo se exponen los bytes ya
+    /// subidos por el propio usuario, nunca otro dato de la cuenta.
+    /// </remarks>
+    /// <param name="id">Identificador del usuario dueño de la foto.</param>
+    /// <response code="200">La imagen, con su content type y caché.</response>
+    /// <response code="404">El usuario no existe o no tiene foto.</response>
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpGet("foto/{id:int}")]
+    public async Task<IActionResult> ObtenerFoto(int id)
+    {
+        var usuario = await _db.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.IdUsuario == id);
+
+        if (usuario?.FotoArchivo is null || string.IsNullOrEmpty(usuario.FotoContentType))
+            return NotFound();
+
+        // La URL incluye el id, no un hash: la caché se limita a un día para
+        // que un reemplazo de foto se vea razonablemente pronto.
+        Response.Headers["Cache-Control"] = "public, max-age=86400";
+        return File(usuario.FotoArchivo, usuario.FotoContentType);
+    }
+
+    /// <summary>Elimina la foto de perfil del usuario autenticado.</summary>
+    /// <remarks>
+    /// Idempotente: borrar una foto que no existe también responde 204. Limpia
+    /// los bytes, el content type y la ruta, de modo que el cliente vuelve a
+    /// mostrar las iniciales.
+    /// </remarks>
+    /// <response code="204">La foto fue eliminada (o no había).</response>
+    /// <response code="404">El usuario autenticado no existe.</response>
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [HttpDelete("foto")]
+    public async Task<IActionResult> QuitarFoto()
+    {
+        var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
+        if (usuario is null)
+            return NotFound();
+
+        usuario.FotoArchivo = null;
+        usuario.FotoContentType = null;
+        usuario.FotoPerfil = null;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Actualiza solo la preferencia de idioma del usuario autenticado.</summary>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

@@ -74,6 +74,10 @@ public class ActualizarIdiomaRequest
     public string IdiomaPreferido { get; set; } = null!;
 }
 
+// Respuesta de POST api/Usuarios/foto: la ruta que el cliente usa como src
+// de la imagen (el propio endpoint de streaming la sirve con AllowAnonymous).
+public record FotoPerfilResponse(string FotoPerfil);
+
 public record UpdateHogarRequest([Required] string NombreFamiliar);
 
 public record UpdateUsuarioRequest(string? Nombre, string? Rol);
