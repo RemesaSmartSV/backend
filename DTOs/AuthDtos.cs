@@ -27,6 +27,9 @@ public record LoginRequest(
 
 // Rol e IdHogar son nullables: un usuario recién registrado queda sin hogar y sin rol
 // hasta que crea un hogar (POST api/hogares) o se une a uno existente.
+// FotoPerfil va al final del record posicional: cualquier construcción
+// posicional que exista sigue siendo válida y el campo es aditivo
+// (null cuando el usuario nunca subió foto).
 public record LoginResponse(
     string Token,
     int IdUsuario,
@@ -34,7 +37,8 @@ public record LoginResponse(
     string Correo,
     string? Rol,
     int? IdHogar,
-    string? IdiomaPreferido);
+    string? IdiomaPreferido,
+    string? FotoPerfil);
 
 public record AddMemberRequest(
     [Required] string Nombre,

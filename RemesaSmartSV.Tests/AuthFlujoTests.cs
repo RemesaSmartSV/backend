@@ -287,6 +287,29 @@ public class AuthFlujoTests : IDisposable
         Assert.Equal("en", respuesta.IdiomaPreferido);
     }
 
+    // El avatar del Navbar pinta usuario.fotoPerfil desde la sesión: sin este
+    // campo en LoginResponse un login fresco arranca sin foto aunque la
+    // entidad la tenga guardada.
+    [Fact]
+    public async Task Login_Exitoso_IncluyeFotoPerfilEnLaRespuesta()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        usuario.ContrasenaHash = new Microsoft.AspNetCore.Identity.PasswordHasher<Usuario>()
+            .HashPassword(usuario, "ClaveSegura123");
+        usuario.FotoPerfil = "/api/Usuarios/foto/1";
+        await _db.SaveChangesAsync();
+
+        var email = new EmailRegistrador();
+        var controller = new AuthController(CrearAuthService(), _db, email, _config, new GoogleNonceStore());
+        AsignarClaims(controller, usuario.IdUsuario, idHogarClaim: 0);
+
+        var resultado = await controller.Login(new LoginRequest("ana@gmail.com", "ClaveSegura123"));
+
+        var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
+        var respuesta = Assert.IsType<LoginResponse>(okResult.Value);
+        Assert.Equal("/api/Usuarios/foto/1", respuesta.FotoPerfil);
+    }
+
     [Fact]
     public async Task UsuariosController_ActualizarIdioma_PersisteIdiomaSoportado()
     {

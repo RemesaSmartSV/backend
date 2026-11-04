@@ -78,7 +78,8 @@ public class AuthService
         Correo: usuario.Correo,
         Rol: usuario.Rol,
         IdHogar: usuario.IdHogar,
-        IdiomaPreferido: usuario.IdiomaPreferido);
+        IdiomaPreferido: usuario.IdiomaPreferido,
+        FotoPerfil: usuario.FotoPerfil);
 
     private string GenerateToken(Usuario usuario)
     {
