@@ -36,7 +36,8 @@ public sealed class ConsejoIaDto
 
 public interface IConsejosIaService
 {
-    Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(CancellationToken ct = default);
+    /// <summary>Obtiene los consejos en el idioma dado: "es" (por defecto) u "en".</summary>
+    Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(string idioma = "es", CancellationToken ct = default);
 }
 
 /// <summary>
@@ -52,7 +53,9 @@ public interface IConsejosIaService
 /// </summary>
 public sealed class ConsejosIaService : IConsejosIaService
 {
-    internal const string CacheKey = "consejos_ia";
+    /// <summary>Prefijo de la clave de caché; cada idioma tiene la suya.</summary>
+    internal const string CacheKeyPrefijo = "consejos_ia";
+
     internal static readonly TimeSpan CacheTtl = TimeSpan.FromHours(2);
 
     private const string UrlGroq = "https://api.groq.com/openai/v1/chat/completions";
@@ -77,29 +80,57 @@ public sealed class ConsejosIaService : IConsejosIaService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Traducciones al inglés de los dos tips sembrados por la migración
+    /// Fase2d_TipsGlobales (los únicos títulos/contenidos fijos de la DB).
+    /// Cualquier otro tip (o cualquier cambio de redacción) se devuelve tal cual.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> TipsEn =
+        new Dictionary<string, string>
+        {
+            ["Planificación de menú semanal"] = "Weekly meal planning",
+            ["Elaborar un menú semanal antes de ir al supermercado te ayuda a comprar solo lo necesario y evitar desperdicios, reduciendo significativamente tus gastos mensuales."] =
+                "Planning a weekly menu before going to the supermarket helps you buy only what you need and avoid waste, significantly reducing your monthly expenses.",
+            ["Optimización del consumo eléctrico"] = "Optimizing electricity use",
+            ["Desconectar los electrodomésticos que no están en uso y aprovechar la luz natural puede disminuir hasta un 15% el monto de tu recibo de energía mensual."] =
+                "Unplugging appliances that are not in use and taking advantage of natural light can reduce your monthly energy bill by up to 15%."
+        };
+
+    /// <summary>Clave de caché por idioma: cada idioma rota de forma independiente.</summary>
+    internal static string CacheKeyPara(string idioma)
+        => $"{CacheKeyPrefijo}_{NormalizarIdioma(idioma)}";
+
+    /// <summary>Solo "en" cambia de idioma; cualquier otra cosa cae a "es".</summary>
+    internal static string NormalizarIdioma(string? idioma)
+        => string.Equals(idioma?.Trim(), "en", StringComparison.OrdinalIgnoreCase) ? "en" : "es";
+
+    public async Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(
+        string idioma = "es", CancellationToken ct = default)
     {
-        if (_cache.TryGetValue(CacheKey, out IReadOnlyList<ConsejoIaDto>? cacheados) && cacheados is not null)
+        var lang = NormalizarIdioma(idioma);
+        var cacheKey = CacheKeyPara(lang);
+
+        if (_cache.TryGetValue(cacheKey, out IReadOnlyList<ConsejoIaDto>? cacheados) && cacheados is not null)
             return cacheados;
 
         if (string.IsNullOrWhiteSpace(_config.ApiKey))
         {
             _logger.LogInformation("GROQ_API_KEY no configurada. Consejos desde la base de datos (IA desactivada).");
-            return await ConsejosDeLaBaseAsync();
+            return await ConsejosDeLaBaseAsync(lang);
         }
 
-        var consejos = await IntentarGroqAsync(ct);
+        var consejos = await IntentarGroqAsync(lang, ct);
 
         if (consejos is { Count: > 0 })
         {
-            _cache.Set(CacheKey, consejos, new MemoryCacheEntryOptions
+            _cache.Set(cacheKey, consejos, new MemoryCacheEntryOptions
             {
                 AbsoluteExpirationRelativeToNow = CacheTtl
             });
             return consejos;
         }
 
-        return await ConsejosDeLaBaseAsync();
+        return await ConsejosDeLaBaseAsync(lang);
     }
 
     // -----------------------------------------------------------------
@@ -107,11 +138,11 @@ public sealed class ConsejosIaService : IConsejosIaService
     // llamador caiga al fallback de la DB.
     // -----------------------------------------------------------------
 
-    private async Task<IReadOnlyList<ConsejoIaDto>?> IntentarGroqAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<ConsejoIaDto>?> IntentarGroqAsync(string idioma, CancellationToken ct)
     {
         try
         {
-            using var request = ConstruirRequest();
+            using var request = ConstruirRequest(idioma);
             using var respuesta = await _http.SendAsync(request, ct);
 
             if (!respuesta.IsSuccessStatusCode)
@@ -149,8 +180,14 @@ public sealed class ConsejosIaService : IConsejosIaService
         }
     }
 
-    private HttpRequestMessage ConstruirRequest()
+    private HttpRequestMessage ConstruirRequest(string idioma)
     {
+        // La única diferencia entre idiomas es la instrucción de idioma del
+        // prompt; el resto del sistema queda idéntico al de siempre.
+        var instruccionIdioma = NormalizarIdioma(idioma) == "en"
+            ? "Da consejos en inglés"
+            : "Da consejos en español";
+
         var body = new
         {
             model = _config.Model,
@@ -159,7 +196,7 @@ public sealed class ConsejosIaService : IConsejosIaService
                 new
                 {
                     role = "system",
-                    content = "Eres un asesor financiero personal. Da consejos en español para usuarios de " +
+                    content = "Eres un asesor financiero personal. " + instruccionIdioma + " para usuarios de " +
                               "El Salvador, concretos y accionables, aplicables a presupuesto familiar, ahorro " +
                               "y remesas."
                 },
@@ -263,14 +300,32 @@ public sealed class ConsejosIaService : IConsejosIaService
 
     // -----------------------------------------------------------------
     // Fallback a la DB (mismo orden que GET /api/TipsFinancieros: por Titulo).
+    // En inglés solo se traducen los tips sembrados que conoce el mapa;
+    // el resto (o si el texto cambió) vuelve tal cual, nunca se inventa.
     // -----------------------------------------------------------------
 
-    private async Task<IReadOnlyList<ConsejoIaDto>> ConsejosDeLaBaseAsync()
-        => await _db.TipsFinancieros
+    private async Task<IReadOnlyList<ConsejoIaDto>> ConsejosDeLaBaseAsync(string idioma)
+    {
+        var tips = await _db.TipsFinancieros
             .AsNoTracking()
             .OrderBy(t => t.Titulo)
             .Select(t => new ConsejoIaDto { Titulo = t.Titulo, Contenido = t.Contenido })
             .ToListAsync();
+
+        if (NormalizarIdioma(idioma) != "en")
+            return tips;
+
+        return tips
+            .Select(t => new ConsejoIaDto
+            {
+                Titulo = Traducir(t.Titulo),
+                Contenido = Traducir(t.Contenido)
+            })
+            .ToList();
+    }
+
+    private static string Traducir(string texto)
+        => TipsEn.TryGetValue(texto, out var traducido) ? traducido : texto;
 
     // Modelos internos del payload de Groq (camelCase de la API OpenAI).
     private sealed class RespuestaConsejos

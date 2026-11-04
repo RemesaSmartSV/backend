@@ -269,11 +269,132 @@ public class ConsejosIaTests : IDisposable
         Assert.Equal("Tip de prueba", consejos.Single().Titulo);
     }
 
+    // -----------------------------------------------------------------
+    // 6. T2 — idioma: default "es", "en" válido, "fr" → 400, caché por
+    //    idioma, prompt en el idioma y fallback de DB traducido.
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public async Task ControllerGet_SinIdioma_PasaEsPorDefecto()
+    {
+        var fake = new ServicioFalso(new List<ConsejoIaDto>
+        {
+            new() { Titulo = "Tip", Contenido = "Contenido." }
+        });
+        var controller = new ConsejosIaController(fake);
+
+        var resultado = await controller.Get(CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+        Assert.Equal("es", fake.UltimoIdioma);
+    }
+
+    [Fact]
+    public async Task ControllerGet_IdiomaEn_PasaEnAlServicio()
+    {
+        var fake = new ServicioFalso(new List<ConsejoIaDto>
+        {
+            new() { Titulo = "Tip", Contenido = "Contenido." }
+        });
+        var controller = new ConsejosIaController(fake);
+
+        var resultado = await controller.Get(CancellationToken.None, "en");
+
+        Assert.IsType<OkObjectResult>(resultado.Result);
+        Assert.Equal("en", fake.UltimoIdioma);
+    }
+
+    [Fact]
+    public async Task ControllerGet_IdiomaInvalido_Retorna400()
+    {
+        var fake = new ServicioFalso(new List<ConsejoIaDto>());
+        var controller = new ConsejosIaController(fake);
+
+        var resultado = await controller.Get(CancellationToken.None, "fr");
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(resultado.Result);
+        Assert.Equal("El idioma debe ser es o en.", GetMensaje(badRequest));
+        Assert.Null(fake.UltimoIdioma); // No llega al servicio.
+    }
+
+    /// <summary>Lee el { message = "..." } anónimo de los BadRequest del repo.</summary>
+    private static string? GetMensaje(BadRequestObjectResult resultado)
+    {
+        var propiedad = resultado.Value?.GetType().GetProperty("message");
+        return propiedad?.GetValue(resultado.Value) as string;
+    }
+
+    [Fact]
+    public async Task SinApiKey_IdiomaEn_TraduceLosTipsSembrados()
+    {
+        // Los dos títulos/contenidos exactos de la migración Fase2d.
+        _db.TipsFinancieros.Add(new EducacionFinanciera
+        {
+            Titulo = "Planificación de menú semanal",
+            Contenido = "Elaborar un menú semanal antes de ir al supermercado te ayuda a comprar solo lo necesario y evitar desperdicios, reduciendo significativamente tus gastos mensuales."
+        });
+        _db.TipsFinancieros.Add(new EducacionFinanciera
+        {
+            Titulo = "Optimización del consumo eléctrico",
+            Contenido = "Desconectar los electrodomésticos que no están en uso y aprovechar la luz natural puede disminuir hasta un 15% el monto de tu recibo de energía mensual."
+        });
+        await _db.SaveChangesAsync();
+
+        var handler = new StubGroqHandler(_ => Respuesta(HttpStatusCode.OK, RespuestaGroqValida));
+        var servicio = CrearServicio(apiKey: string.Empty, handler);
+
+        var en = await servicio.ObtenerConsejosAsync("en");
+        var es = await servicio.ObtenerConsejosAsync();
+
+        Assert.Equal(2, en.Count);
+        Assert.Contains(en, c => c.Titulo == "Weekly meal planning");
+        Assert.Contains(en, c => c.Titulo == "Optimizing electricity use");
+        Assert.DoesNotContain(en, c => c.Titulo.Contains("Optimización"));
+
+        // El camino en español sigue byte-idéntico al de siempre.
+        Assert.Equal(2, es.Count);
+        Assert.Contains(es, c => c.Titulo == "Planificación de menú semanal");
+        Assert.Contains(es, c => c.Titulo == "Optimización del consumo eléctrico");
+    }
+
+    [Fact]
+    public async Task Groq_IdiomaEn_CacheYPromptIndependientes()
+    {
+        await SembrarTipsAsync();
+        var handler = new StubGroqHandler(_ => Respuesta(HttpStatusCode.OK, RespuestaGroqValida));
+        var servicio = CrearServicio("clave-de-prueba", handler);
+
+        await servicio.ObtenerConsejosAsync("es");
+        var cuerpoEs = handler.UltimoCuerpo;
+        await servicio.ObtenerConsejosAsync("en");
+        var cuerpoEn = handler.UltimoCuerpo;
+
+        // Prompt: solo cambia la instrucción de idioma. (System.Text.Json
+        // escapa los acentos a \uXXXX, por eso se afirma sin la letra acentuada.)
+        Assert.Contains("Da consejos en espa", cuerpoEs);
+        Assert.Contains("Da consejos en ingl", cuerpoEn);
+
+        // Caché por idioma: es → en son dos entradas distintas (2 llamadas),
+        // y repetir el mismo idioma no vuelve a pegar a Groq (sigue en 2).
+        Assert.Equal(2, handler.Llamadas);
+        await servicio.ObtenerConsejosAsync("en");
+        Assert.Equal(2, handler.Llamadas);
+    }
+
     private sealed class ServicioFalso : IConsejosIaService
     {
         private readonly IReadOnlyList<ConsejoIaDto> _consejos;
+
+        /// <summary>Último idioma recibido por el servicio (para assertions del controlador).</summary>
+        public string? UltimoIdioma { get; private set; }
+
         public ServicioFalso(IReadOnlyList<ConsejoIaDto> consejos) => _consejos = consejos;
-        public Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(CancellationToken ct = default)
-            => Task.FromResult(_consejos);
+
+        public Task<IReadOnlyList<ConsejoIaDto>> ObtenerConsejosAsync(
+            string idioma = "es", CancellationToken ct = default)
+        {
+            UltimoIdioma = idioma;
+            return Task.FromResult(_consejos);
+        }
     }
 }
