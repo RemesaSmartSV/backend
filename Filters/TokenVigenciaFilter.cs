@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using RemesaSmartSV.Data;
+using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
 
 namespace RemesaSmartSV.Filters;
@@ -23,8 +25,18 @@ namespace RemesaSmartSV.Filters;
 public class TokenVigenciaFilter : IAsyncActionFilter
 {
     private readonly ApplicationDbContext _db;
+    private readonly IMemoryCache? _cache;
 
-    public TokenVigenciaFilter(ApplicationDbContext db) => _db = db;
+    // Ventana de caché de la validación de membresía. Reduce la consulta a BD por
+    // request; a cambio, una expulsión/cambio de familia tarda hasta esta ventana en
+    // reflejarse. Se mantiene corta para acotar esa demora de revocación.
+    private const int VentanaCacheSegundos = 15;
+
+    public TokenVigenciaFilter(ApplicationDbContext db, IMemoryCache? cache = null)
+    {
+        _db = db;
+        _cache = cache;
+    }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
@@ -53,46 +65,66 @@ public class TokenVigenciaFilter : IAsyncActionFilter
             return;
         }
 
-        var usuario = await _db.Usuarios
-            .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        var usuario = await ObtenerUsuarioAsync(idUsuario);
 
-        // El usuario fue eliminado de la BD: el token ya no representa a nadie.
-        if (usuario is null)
+        // Camino rápido: si el usuario está en caché y el token no afirma una
+        // membresía mayor que la vigente, se continúa sin consultar la BD.
+        if (usuario is not null && !EsRechazo(context.HttpContext.User, usuario))
         {
-            await ResponderNoVigente(context);
+            await next();
             return;
         }
 
-        // El claim idHogar quedó congelado al firmar el token, y la comparación
-        // con la BD es asimétrica: solo se rechaza si el token afirma una familia
-        // que ya no es la vigente (expulsión, abandono o cambio de familia).
-        // Si el token afirma idHogar=0 (sin familia) y la BD sí le asigna una
-        // (recién unido), se deja pasar: el token subestima y, con GetIdHogar()
-        // en 0, los endpoints del hogar devuelven vacío/404/400 o 403 — no hay
-        // acceso a datos ajenos.
-        var idHogarToken = context.HttpContext.User.GetIdHogar();
-        if (idHogarToken != 0 && idHogarToken != (usuario.IdHogar ?? 0))
-        {
-            await ResponderNoVigente(context);
-            return;
-        }
-
-        // El rol también puede cambiar mientras el token sigue vivo, y la
-        // comparación vuelve a ser asimétrica: solo se rechaza si el token afirma
-        // el privilegio más sensible (Admin) sin respaldo en la BD (degradación).
-        // Cualquier otra diferencia —p. ej. token Miembro y BD Admin tras una
-        // promoción— se deja pasar: el token subestima y [Authorize(Roles="Admin")]
-        // deniega con 403 por la vía normal, dejando libre el flujo de
-        // refrescar-sesion.
-        var rolToken = context.HttpContext.User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
-        if (rolToken == "Admin" && (usuario.Rol ?? string.Empty) != "Admin")
+        // Posible rechazo (o usuario no cacheado): se re-valida contra la BD antes
+        // de responder 401 para no rechazar por una caché desactualizada (p. ej. el
+        // usuario acaba de crear/unirse a una familia y la caché aún no lo refleja).
+        usuario = await _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        if (usuario is not null)
+            _cache?.Set($"TokenVigencia:{idUsuario}", usuario, TimeSpan.FromSeconds(VentanaCacheSegundos));
+        if (usuario is null || EsRechazo(context.HttpContext.User, usuario))
         {
             await ResponderNoVigente(context);
             return;
         }
 
         await next();
+    }
+
+    /// <summary>Regla asimétrica de vigencia: el token nunca puede afirmar más que la
+    /// realidad. Devuelve true si hay que rechazar por membresía no vigente.</summary>
+    private static bool EsRechazo(ClaimsPrincipal user, Usuario usuario)
+    {
+        // Solo se rechaza si el token afirma una familia que ya no es la vigente
+        // (expulsión, abandono o cambio de familia). Si el token afirma idHogar=0
+        // (sin familia) y la BD sí le asigna una, se deja pasar: el token subestima.
+        var idHogarToken = user.GetIdHogar();
+        if (idHogarToken != 0 && idHogarToken != (usuario.IdHogar ?? 0))
+            return true;
+
+        // Solo se rechaza si el token afirma Admin sin respaldo en la BD (degradación).
+        var rolToken = user.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+        if (rolToken == "Admin" && (usuario.Rol ?? string.Empty) != "Admin")
+            return true;
+
+        return false;
+    }
+
+    /// <summary>Obtiene el usuario para validar la membresía, con caché en memoria de
+    /// corta duración para no consultar la BD en cada request autenticado.</summary>
+    private async Task<Usuario?> ObtenerUsuarioAsync(int idUsuario)
+    {
+        if (_cache is null)
+            return await _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+
+        var clave = $"TokenVigencia:{idUsuario}";
+        if (_cache.TryGetValue<Usuario>(clave, out var cacheado))
+            return cacheado;
+
+        var usuario = await _db.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.IdUsuario == idUsuario);
+        if (usuario is not null)
+            _cache.Set(clave, usuario, TimeSpan.FromSeconds(VentanaCacheSegundos));
+
+        return usuario;
     }
 
     private static async Task ResponderNoVigente(ActionExecutingContext context)

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Filters;
@@ -227,5 +228,33 @@ public class TokenVigenciaFilterTests : IDisposable
 
         Assert.True(nextLlamado);
         Assert.Null(contexto.Result);
+    }
+
+    [Fact]
+    public async Task ConCache_MembresiaRecienCreada_NoRechazaPorCacheDesactualizada()
+    {
+        // Usuario sin familia: el primer request cachea el estado "sin familia".
+        var usuario = await SembrarUsuarioAsync(1, idHogar: null, rol: null);
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        var filtro = new TokenVigenciaFilter(_db, cache);
+
+        // 1) Token sin familia (idHogar=0): pasa y se cachea.
+        var contexto1 = CrearContexto(ClaimsDe(1, 0, string.Empty));
+        var next1 = false;
+        await filtro.OnActionExecutionAsync(contexto1, () => { next1 = true; return Task.FromResult<ActionExecutedContext>(null!); });
+        Assert.True(next1);
+
+        // 2) El usuario se une a una familia; la BD ahora refleja IdHogar=1.
+        usuario.IdHogar = 1;
+        usuario.Rol = "Miembro";
+        await _db.SaveChangesAsync();
+
+        // 3) El token nuevo refleja la membresía; la caché desactualizada no debe
+        //    producir un 401 falso.
+        var contexto2 = CrearContexto(ClaimsDe(1, 1, "Miembro"));
+        var next2 = false;
+        await filtro.OnActionExecutionAsync(contexto2, () => { next2 = true; return Task.FromResult<ActionExecutedContext>(null!); });
+        Assert.True(next2);
+        Assert.Null(contexto2.Result);
     }
 }

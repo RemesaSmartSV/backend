@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -146,9 +147,21 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()));
 
+// Compresion de respuestas JSON: reduce el ancho de banda y el tiempo de
+// transferencia en red real, lo que permite atender mas usuarios concurrentes.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.MimeTypes = ResponseCompressionDefaults.MimeTypes
+        .Concat(new[] { "application/json", "application/problem+json" });
+});
+
 builder.Services.AddHealthChecks();
 var app = builder.Build();
 
+app.UseResponseCompression();
 app.UseSerilogRequestLogging();
 
 // Manejo global de excepciones: en Produccion solo se devuelve un problema generico
