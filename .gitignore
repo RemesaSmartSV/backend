@@ -33,6 +33,8 @@ secrets.json
 
 ## Database backups
 scripts/backup_*.sql
+backups/
+*.dump
 
 ## Variables de entorno locales
 .env
@@ -41,3 +43,6 @@ scripts/backup_*.sql
 
 # Indice local de CodeGraph (tooling, no se versiona)
 .codegraph/
+
+# Metadatos de tooling local
+.atl/
