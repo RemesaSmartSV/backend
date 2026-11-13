@@ -136,7 +136,7 @@ public class UsuariosController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPost("foto")]
-    public async Task<ActionResult> SubirFoto([FromForm] IFormFile? archivo)
+    public async Task<ActionResult> SubirFoto(IFormFile? archivo)
     {
         var usuario = await _db.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == User.GetIdUsuario());
         if (usuario is null)
