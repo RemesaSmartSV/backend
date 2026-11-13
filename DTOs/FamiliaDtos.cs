@@ -33,7 +33,7 @@ public class CrearSolicitudUnionRequest
 
 public record SolicitudUnionPropiaDto(
     int IdSolicitud,
-    string CodigoPublico,
+    string? CodigoPublico,
     string NombreFamilia,
     string Estado,
     DateTime FechaSolicitud,

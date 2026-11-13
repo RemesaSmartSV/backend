@@ -54,13 +54,11 @@ namespace RemesaSmartSV.Migrations
 
                     b.HasKey("IdAporte");
 
-                    b.HasIndex("IdHogar");
-
                     b.HasIndex("IdMeta");
 
                     b.HasIndex("IdUsuario");
 
-                    b.HasIndex("IdempotencyKey")
+                    b.HasIndex("IdHogar", "IdempotencyKey")
                         .IsUnique();
 
                     b.ToTable("Aportes");
@@ -650,7 +648,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Categoria", "Categoria")
                         .WithMany()
                         .HasForeignKey("IdCategoria")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")
@@ -688,7 +686,7 @@ namespace RemesaSmartSV.Migrations
                     b.HasOne("RemesaSmartSV.Entities.Categoria", "Categoria")
                         .WithMany("Presupuestos")
                         .HasForeignKey("IdCategoria")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("RemesaSmartSV.Entities.Hogar", "Hogar")

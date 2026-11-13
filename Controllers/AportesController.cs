@@ -60,7 +60,7 @@ public class AportesController : ControllerBase
             return Forbid();
 
         var repetido = await _db.Aportes.AsNoTracking()
-            .FirstOrDefaultAsync(a => a.IdempotencyKey == request.IdempotencyKey);
+            .FirstOrDefaultAsync(a => a.IdHogar == idHogar.Value && a.IdempotencyKey == request.IdempotencyKey);
         if (repetido is not null)
             return ResultadoIdempotente(repetido, request, idHogar.Value, idUsuario);
 
@@ -137,7 +137,7 @@ public class AportesController : ControllerBase
             if (transaction is not null) await transaction.RollbackAsync();
             _db.ChangeTracker.Clear();
             var duplicado = await _db.Aportes.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.IdempotencyKey == request.IdempotencyKey);
+                .FirstOrDefaultAsync(a => a.IdHogar == idHogar.Value && a.IdempotencyKey == request.IdempotencyKey);
             if (duplicado is not null)
                 return ResultadoIdempotente(duplicado, request, idHogar.Value, idUsuario);
             return Conflict(new { message = "No se pudo confirmar el aporte. Inténtalo nuevamente." });
@@ -299,5 +299,5 @@ public class AportesController : ControllerBase
     private static bool EsColisionIdempotencia(DbUpdateException exception)
         => exception.InnerException is PostgresException postgres
            && postgres.SqlState == PostgresErrorCodes.UniqueViolation
-           && postgres.ConstraintName == "IX_Aportes_IdempotencyKey";
+           && postgres.ConstraintName == "IX_Aportes_IdHogar_IdempotencyKey";
 }

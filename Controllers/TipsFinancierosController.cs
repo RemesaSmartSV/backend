@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,8 +13,15 @@ namespace RemesaSmartSV.Controllers;
 public class TipsFinancierosController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly HashSet<string> _adminsGlobales;
 
-    public TipsFinancierosController(ApplicationDbContext db) => _db = db;
+    public TipsFinancierosController(ApplicationDbContext db, IConfiguration config)
+    {
+        _db = db;
+        _adminsGlobales = (config["TIPS_ADMIN_EMAILS"] ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
 
     /// <summary>Obtiene todos los consejos financieros.</summary>
     /// <response code="200">Devuelve la lista de consejos financieros.</response>
@@ -49,12 +57,16 @@ public class TipsFinancierosController : ControllerBase
     /// <param name="tip">Datos del consejo financiero que se creará.</param>
     /// <response code="201">El consejo financiero fue creado.</response>
     /// <response code="400">La categoría no existe o no pertenece al hogar del usuario.</response>
+    /// <response code="403">El usuario no es un administrador global de tips.</response>
     [ProducesResponseType(typeof(EducacionFinanciera), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<ActionResult<EducacionFinanciera>> Create([FromBody] EducacionFinanciera tip)
     {
+        if (!EsAdminGlobal())
+            return Forbid();
         if (tip.IdCategoria.HasValue && !await CategoriaDelHogarExiste(tip.IdCategoria.Value))
             return BadRequest(new { message = "La categoría no existe." });
 
@@ -71,14 +83,18 @@ public class TipsFinancierosController : ControllerBase
     /// <param name="input">Nuevos datos del consejo.</param>
     /// <response code="204">El consejo financiero fue actualizado.</response>
     /// <response code="400">La categoría no existe o no pertenece al hogar del usuario.</response>
+    /// <response code="403">El usuario no es un administrador global de tips.</response>
     /// <response code="404">El consejo no existe.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpPut("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<IActionResult> Update(int id, [FromBody] EducacionFinanciera input)
     {
+        if (!EsAdminGlobal())
+            return Forbid();
         var tip = await _db.TipsFinancieros.FindAsync(id);
         if (tip is null)
             return NotFound();
@@ -99,13 +115,17 @@ public class TipsFinancierosController : ControllerBase
     /// <summary>Elimina un consejo financiero.</summary>
     /// <param name="id">Identificador del consejo financiero.</param>
     /// <response code="204">El consejo financiero fue eliminado.</response>
+    /// <response code="403">El usuario no es un administrador global de tips.</response>
     /// <response code="404">El consejo no existe.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [HttpDelete("{id}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!EsAdminGlobal())
+            return Forbid();
         var tip = await _db.TipsFinancieros.FindAsync(id);
         if (tip is null)
             return NotFound();
@@ -117,4 +137,17 @@ public class TipsFinancierosController : ControllerBase
     /// <summary>True si la categoría existe y es del hogar del usuario autenticado.</summary>
     private Task<bool> CategoriaDelHogarExiste(int idCategoria)
         => _db.Categorias.AnyAsync(c => c.IdCategoria == idCategoria && c.IdHogar == User.GetIdHogar());
+
+    /// <summary>True si el usuario figura en la lista blanca de administradores globales de tips.</summary>
+    private bool EsAdminGlobal()
+    {
+        if (_adminsGlobales.Count == 0)
+            return false;
+
+        var correo = User.FindFirst(ClaimTypes.Email)?.Value
+            ?? User.FindFirst("email")?.Value;
+
+        return !string.IsNullOrWhiteSpace(correo)
+            && _adminsGlobales.Contains(correo);
+    }
 }

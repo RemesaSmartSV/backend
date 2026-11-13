@@ -184,7 +184,12 @@ public class MovimientosController : ControllerBase
         if (string.IsNullOrEmpty(valor))
             return string.Empty;
 
-        return $"\"{valor.Replace("\"", "\"\"")}\"";
+        var seguro = valor;
+        var sinEspacios = valor.TrimStart();
+        if (sinEspacios.Length > 0 && "=+-@\t\r".Contains(sinEspacios[0]))
+            seguro = "'" + valor;
+
+        return $"\"{seguro.Replace("\"", "\"\"")}\"";
     }
 
     /// <summary>Crea un movimiento para el hogar actual.</summary>
@@ -199,6 +204,8 @@ public class MovimientosController : ControllerBase
     {
         if (!EsTipoMovimientoValido(movimiento.Tipo))
             return BadRequest(new { message = "El tipo debe ser Ingreso, Gasto o Ahorro." });
+        if (!EsOrigenEmisoraValido(movimiento.OrigenEmisora))
+            return BadRequest(new { message = "El origen del movimiento no es válido." });
 
         var idHogar = User.GetIdHogar();
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == movimiento.IdCategoria && c.IdHogar == idHogar);
@@ -208,6 +215,7 @@ public class MovimientosController : ControllerBase
         movimiento.IdMovimiento = 0;
         movimiento.IdHogar = idHogar;
         movimiento.IdUsuario = User.GetIdUsuario();
+        movimiento.OrigenEmisora = NormalizarOrigenEmisora(movimiento.OrigenEmisora);
         _db.Movimientos.Add(movimiento);
         await _db.SaveChangesAsync();
 
@@ -425,6 +433,8 @@ public class MovimientosController : ControllerBase
     {
         if (!EsTipoMovimientoValido(input.Tipo))
             return BadRequest(new { message = "El tipo debe ser Ingreso, Gasto o Ahorro." });
+        if (!EsOrigenEmisoraValido(input.OrigenEmisora))
+            return BadRequest(new { message = "El origen del movimiento no es válido." });
 
         var movimiento = await _db.Movimientos.FirstOrDefaultAsync(m => m.IdMovimiento == id && m.IdHogar == User.GetIdHogar());
         if (movimiento is null)
@@ -450,7 +460,7 @@ public class MovimientosController : ControllerBase
         movimiento.Fecha = input.Fecha;
         movimiento.Tipo = input.Tipo;
         movimiento.Descripcion = input.Descripcion;
-        movimiento.OrigenEmisora = input.OrigenEmisora;
+        movimiento.OrigenEmisora = NormalizarOrigenEmisora(input.OrigenEmisora);
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -459,6 +469,21 @@ public class MovimientosController : ControllerBase
         => string.Equals(tipo, "Ingreso", StringComparison.Ordinal) ||
            string.Equals(tipo, "Gasto", StringComparison.Ordinal) ||
            string.Equals(tipo, "Ahorro", StringComparison.Ordinal);
+
+    private const int LongitudMaximaOrigenEmisora = 100;
+
+    private static bool EsOrigenEmisoraValido(string? origen)
+    {
+        if (string.IsNullOrWhiteSpace(origen))
+            return true;
+
+        var valor = origen.Trim();
+        return valor.Length <= LongitudMaximaOrigenEmisora
+            && !valor.StartsWith("aporte:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? NormalizarOrigenEmisora(string? origen)
+        => string.IsNullOrWhiteSpace(origen) ? null : origen.Trim();
 
     /// <summary>Mensaje al intentar modificar o borrar el movimiento espejo de un aporte.</summary>
     private const string MensajeMovimientoEspejo =

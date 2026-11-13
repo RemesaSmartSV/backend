@@ -106,11 +106,16 @@ builder.Services.AddAuthorization();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddFixedWindowLimiter("auth", limiter =>
+    options.AddPolicy("auth", context =>
     {
-        limiter.PermitLimit = 10;
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.QueueLimit = 0;
+        var origen = context.Connection.RemoteIpAddress?.ToString() ?? "origen-desconocido";
+        return RateLimitPartition.GetFixedWindowLimiter(origen, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
     });
 });
 
@@ -122,7 +127,18 @@ var corsOrigins = builder.Configuration["CORS_ORIGINS_PROD"]
 
 var allowedOrigins = corsOrigins?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    ?? new[] { "http://localhost:5173" };
+    ?? Array.Empty<string>();
+
+if (allowedOrigins.Length == 0)
+{
+    if (!builder.Environment.IsDevelopment())
+        throw new InvalidOperationException("Falta CORS_ORIGINS_PROD: en Produccion no se permite un origen por defecto.");
+
+    allowedOrigins = new[] { "http://localhost:5173" };
+}
+
+if (allowedOrigins.Contains("*", StringComparer.Ordinal))
+    throw new InvalidOperationException("CORS no admite el comodin '*': configura los origenes exactos.");
 
 builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>

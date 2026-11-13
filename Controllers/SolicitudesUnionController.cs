@@ -118,7 +118,9 @@ public class SolicitudesUnionController : ControllerBase
             if (transaction is not null) await transaction.CommitAsync();
 
             return CreatedAtAction(nameof(Mias), new { }, new SolicitudUnionPropiaDto(
-                solicitud.IdSolicitud, hogar.CodigoPublico, hogar.NombreFamiliar,
+                solicitud.IdSolicitud,
+                tieneCodigo ? hogar.CodigoPublico : null,
+                hogar.NombreFamiliar,
                 solicitud.Estado, solicitud.FechaSolicitud, solicitud.FechaRespuesta));
         }
         catch (DbUpdateException ex) when (EsSolicitudPendienteDuplicada(ex))
@@ -138,7 +140,7 @@ public class SolicitudesUnionController : ControllerBase
             .Include(s => s.Hogar)
             .OrderByDescending(s => s.FechaSolicitud)
             .Select(s => new SolicitudUnionPropiaDto(
-                s.IdSolicitud, s.Hogar.CodigoPublico, s.Hogar.NombreFamiliar,
+                s.IdSolicitud, null, s.Hogar.NombreFamiliar,
                 s.Estado, s.FechaSolicitud, s.FechaRespuesta))
             .ToListAsync();
         return Ok(solicitudes);

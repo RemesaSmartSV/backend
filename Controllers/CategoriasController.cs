@@ -83,6 +83,7 @@ public class CategoriasController : ControllerBase
 
         categoria.IdCategoria = 0;
         categoria.IdHogar = idHogar.Value;
+        categoria.EsSistema = false;
         _db.Categorias.Add(categoria);
         await _db.SaveChangesAsync();
         return CreatedAtAction(nameof(GetCategoria), new { id = categoria.IdCategoria }, categoria);
@@ -95,13 +96,21 @@ public class CategoriasController : ControllerBase
     /// <response code="204">La categoría fue actualizada.</response>
     /// <response code="404">La categoría no existe o no pertenece al hogar.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] Categoria input)
     {
+        if (!User.IsInRole("Admin"))
+            return Forbid();
+
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == id && c.IdHogar == User.GetIdHogar());
         if (categoria is null)
             return NotFound();
+        if (categoria.EsSistema)
+            return Conflict(new { message = "Las categorías del sistema no se pueden modificar." });
+
         categoria.Nombre = input.Nombre;
         categoria.Tipo = input.Tipo;
         categoria.Icono = input.Icono;
@@ -114,13 +123,26 @@ public class CategoriasController : ControllerBase
     /// <response code="204">La categoría fue eliminada.</response>
     /// <response code="404">La categoría no existe o no pertenece al hogar.</response>
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!User.IsInRole("Admin"))
+            return Forbid();
+
         var categoria = await _db.Categorias.FirstOrDefaultAsync(c => c.IdCategoria == id && c.IdHogar == User.GetIdHogar());
         if (categoria is null)
             return NotFound();
+        if (categoria.EsSistema)
+            return Conflict(new { message = "Las categorías del sistema no se pueden eliminar." });
+
+        var enUso = await _db.Movimientos.AnyAsync(m => m.IdCategoria == id)
+            || await _db.Presupuestos.AnyAsync(p => p.IdCategoria == id);
+        if (enUso)
+            return Conflict(new { message = "No se puede eliminar una categoría con movimientos o presupuestos asociados." });
+
         _db.Categorias.Remove(categoria);
         await _db.SaveChangesAsync();
         return NoContent();

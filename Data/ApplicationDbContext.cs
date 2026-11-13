@@ -56,18 +56,31 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(a => a.IdHogar)
             .OnDelete(DeleteBehavior.Restrict);
 
-        modelBuilder.Entity<Presupuesto>()
-            .HasOne(p => p.Hogar)
-            .WithMany(h => h.Presupuestos)
-            .HasForeignKey(p => p.IdHogar)
-            .OnDelete(DeleteBehavior.Restrict);
+    modelBuilder.Entity<Presupuesto>()
+        .HasOne(p => p.Hogar)
+        .WithMany(h => h.Presupuestos)
+        .HasForeignKey(p => p.IdHogar)
+        .OnDelete(DeleteBehavior.Restrict);
 
-        // No se puede eliminar un usuario que todavía tenga movimientos registrados.
-        modelBuilder.Entity<Movimiento>()
-            .HasOne(m => m.Usuario)
-            .WithMany()
-            .HasForeignKey(m => m.IdUsuario)
-            .OnDelete(DeleteBehavior.Restrict);
+    modelBuilder.Entity<Presupuesto>()
+        .HasOne(p => p.Categoria)
+        .WithMany(c => c.Presupuestos)
+        .HasForeignKey(p => p.IdCategoria)
+        .OnDelete(DeleteBehavior.Restrict);
+
+    // No se puede eliminar un usuario que todavía tenga movimientos registrados.
+    modelBuilder.Entity<Movimiento>()
+        .HasOne(m => m.Usuario)
+        .WithMany()
+        .HasForeignKey(m => m.IdUsuario)
+        .OnDelete(DeleteBehavior.Restrict);
+
+    // Borrar una categoría no debe arrastrar los movimientos financieros del hogar.
+    modelBuilder.Entity<Movimiento>()
+        .HasOne(m => m.Categoria)
+        .WithMany()
+        .HasForeignKey(m => m.IdCategoria)
+        .OnDelete(DeleteBehavior.Restrict);
 
         // Las categorías nacen con el hogar y no tienen valor propio: se mantienen
         // en cascada para que borrar un hogar sin datos financieros las limpie.
@@ -158,9 +171,9 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Notificacion>()
             .HasIndex(n => new { n.IdUsuario, n.Leida });
 
-        modelBuilder.Entity<AporteMeta>()
-            .HasIndex(a => a.IdempotencyKey)
-            .IsUnique();
+    modelBuilder.Entity<AporteMeta>()
+        .HasIndex(a => new { a.IdHogar, a.IdempotencyKey })
+        .IsUnique();
 
         // Ledger de remesas: FKs con Restrict (política §6.3, igual que el resto
         // de las tablas financieras) e índices de consulta del listado y el resumen.
