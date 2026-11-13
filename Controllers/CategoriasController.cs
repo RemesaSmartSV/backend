@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using RemesaSmartSV.Data;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
@@ -15,8 +16,20 @@ namespace RemesaSmartSV.Controllers;
 public class CategoriasController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
+    private readonly IMemoryCache? _cache;
 
-    public CategoriasController(ApplicationDbContext db) => _db = db;
+    // Ventana del caché de la lista de categorías por hogar. Se invalida al escribir
+    // (crear/editar/borrar) en el propio hogar; la TTL solo acota el desfase entre
+    // instancias al escalar en horizontal (caché en memoria por instancia).
+    private const int VentanaCacheSegundos = 30;
+
+    public CategoriasController(ApplicationDbContext db, IMemoryCache? cache = null)
+    {
+        _db = db;
+        _cache = cache;
+    }
+
+    private static string ClaveCache(int idHogar) => $"categorias:{idHogar}";
 
     /// <summary>Obtiene las categorías del hogar en páginas.</summary>
     /// <param name="page">Número de página que se consultará.</param>
@@ -34,15 +47,13 @@ public class CategoriasController : ControllerBase
             return BadRequest(new { message = "page debe ser mayor o igual a 1 y pageSize debe estar entre 1 y 100." });
 
         var idHogar = User.GetIdHogar();
-        var query = _db.Categorias.Where(c => c.IdHogar == idHogar);
+        var todas = await ObtenerCategoriasAsync(idHogar);
 
-        var total = await query.AsNoTracking().CountAsync();
-        var items = await query
-            .AsNoTracking()
-            .OrderBy(c => c.Nombre)
+        var total = todas.Count;
+        var items = todas
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .ToList();
 
         return Ok(new PaginatedResponse<Categoria>
         {
@@ -51,6 +62,29 @@ public class CategoriasController : ControllerBase
             Page = page,
             PageSize = pageSize
         });
+    }
+
+    /// <summary>Lista completa de categorías del hogar, cacheada en memoria.</summary>
+    private async Task<List<Categoria>> ObtenerCategoriasAsync(int idHogar)
+    {
+        if (_cache is null)
+        {
+            return await _db.Categorias.AsNoTracking()
+                .Where(c => c.IdHogar == idHogar)
+                .OrderBy(c => c.Nombre)
+                .ToListAsync();
+        }
+
+        var clave = ClaveCache(idHogar);
+        if (_cache.TryGetValue<List<Categoria>>(clave, out var cacheado) && cacheado is not null)
+            return cacheado;
+
+        var lista = await _db.Categorias.AsNoTracking()
+            .Where(c => c.IdHogar == idHogar)
+            .OrderBy(c => c.Nombre)
+            .ToListAsync();
+        _cache.Set(clave, lista, TimeSpan.FromSeconds(VentanaCacheSegundos));
+        return lista;
     }
 
     /// <summary>Obtiene una categoría del hogar por su identificador.</summary>
@@ -86,6 +120,7 @@ public class CategoriasController : ControllerBase
         categoria.EsSistema = false;
         _db.Categorias.Add(categoria);
         await _db.SaveChangesAsync();
+        _cache?.Remove(ClaveCache(idHogar.Value));
         return CreatedAtAction(nameof(GetCategoria), new { id = categoria.IdCategoria }, categoria);
     }
 
@@ -115,6 +150,7 @@ public class CategoriasController : ControllerBase
         categoria.Tipo = input.Tipo;
         categoria.Icono = input.Icono;
         await _db.SaveChangesAsync();
+        _cache?.Remove(ClaveCache(User.GetIdHogar()));
         return NoContent();
     }
 
@@ -145,6 +181,7 @@ public class CategoriasController : ControllerBase
 
         _db.Categorias.Remove(categoria);
         await _db.SaveChangesAsync();
+        _cache?.Remove(ClaveCache(User.GetIdHogar()));
         return NoContent();
     }
 

@@ -1,0 +1,84 @@
+# Escalado horizontal del backend — RemesaSmart SV
+#
+# Uso (requiere Docker/WSL2 activo):
+#   docker compose -f docker-compose.scale.yml up --build -d --scale backend_api=3
+#
+# Nota: este archivo es una variante autocontenida del despliegue pensada para
+# escalar el backend en N réplicas. El servicio backend NO define container_name
+# a propósito: Docker lo exige para poder usar --scale.
+#
+# El frontend (nginx) resuelve "backend_api" por DNS de Docker, que reparte la
+# carga entre las réplicas (round-robin). El backend es sin estado (JWT + cachés
+# en memoria por instancia), por lo que escala en horizontal sin sesión compartida.
+#
+# IMPORTANTE: config probada por construcción pero SIN EJECUTAR aquí (el daemon de
+# Docker no corre en esta máquina por falta de WSL2 / Virtual Machine Platform).
+
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: RemesaSmartDB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - remesa_network
+
+  backend_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: on-failure
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - UseHttpsRedirection=false
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - Jwt__Key=${JWT_KEY:?JWT_KEY es obligatorio}
+      - Jwt__Issuer=RemesaSmartSV
+      - Jwt__Audience=RemesaSmartSVClient
+      - CORS_ORIGINS_PROD=${CORS_ORIGINS_PROD:-http://localhost:5173}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - APP_URL=${APP_URL:-http://localhost:5173}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - TIPS_ADMIN_EMAILS=${TIPS_ADMIN_EMAILS:-}
+    ports:
+      - "8080-8090:8080"
+    networks:
+      - remesa_network
+
+  frontend_web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: on-failure
+    depends_on:
+      - backend_api
+    ports:
+      - "5173:80"
+    networks:
+      - remesa_network
+
+volumes:
+  pgdata:
+
+networks:
+  remesa_network:
+    driver: bridge

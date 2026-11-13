@@ -411,4 +411,30 @@ public class SeguridadCorreccionesTests : IDisposable
 
         Assert.IsType<ForbidResult>(result);
     }
+
+    [Fact]
+    public async Task Categorias_CacheSeInvalidaAlCrear_NoSirveDatosObsoletos()
+    {
+        SembrarHogar(1, "Familia Test");
+        SembrarUsuario(1, 1, "ana@gmail.com", "Miembro");
+        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(
+            new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var controller = new CategoriasController(_db, cache);
+        AsignarClaims(controller, 1, 1, "Miembro");
+
+        // Primera lectura: cachea la lista (aún vacía).
+        var r1 = await controller.GetCategorias();
+        var p1 = Assert.IsType<OkObjectResult>(r1.Result);
+        var lista1 = Assert.IsType<PaginatedResponse<Categoria>>(p1.Value);
+        Assert.Empty(lista1.Items);
+
+        // Crear una categoría debe invalidar el caché y reflejarse al momento.
+        await controller.Create(new Categoria { Nombre = "Nueva", Tipo = "Gasto" });
+
+        var r2 = await controller.GetCategorias();
+        var p2 = Assert.IsType<OkObjectResult>(r2.Result);
+        var lista2 = Assert.IsType<PaginatedResponse<Categoria>>(p2.Value);
+        Assert.Single(lista2.Items);
+        Assert.Equal("Nueva", lista2.Items.First().Nombre);
+    }
 }
