@@ -151,7 +151,7 @@ public class CorreosFamiliaTests : IDisposable
     }
 
     [Fact]
-    public async Task CrearMovimiento_EspejoDeAporte_NoEnviaCorreosDeMovimiento()
+    public async Task CrearMovimiento_IntentaForzarOrigenDeAporte_NoEnviaCorreosDeMovimiento()
     {
         SembrarMiembro(1, 1, "autor@gmail.com", "Autor");
         SembrarMiembro(2, 1, "par@gmail.com", "Par");
@@ -173,10 +173,11 @@ public class CorreosFamiliaTests : IDisposable
             OrigenEmisora = "aporte:1",
         });
 
-        Assert.IsType<CreatedAtActionResult>(resultado.Result);
+        // El origen "aporte:" solo lo fija el backend al crear el espejo de un
+        // aporte; un cliente no puede forzarlo desde la API de movimientos.
+        Assert.IsType<BadRequestObjectResult>(resultado.Result);
 
-        // Se deja pasar el turno del fan-out: el espejo de un aporte no debe
-        // generar ningún aviso de movimiento.
+        // Se deja pasar el turno del fan-out: no debe generar ningún aviso.
         await Task.Delay(300);
         Assert.Empty(email.Enviados);
     }
