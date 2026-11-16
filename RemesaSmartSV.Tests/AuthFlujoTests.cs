@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -565,5 +567,113 @@ public class AuthFlujoTests : IDisposable
 
         Assert.IsType<BadRequestObjectResult>(resultado);
         Assert.Empty(email.Enviados);
+    }
+
+    // ---------- Restablecimiento de contraseña por enlace de correo ----------
+
+    private static string HashResetToken(string token)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    [Fact]
+    public async Task SolicitarReset_UsuarioExistente_GeneraTokenYEnviaCorreo()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var email = new EmailRegistrador();
+        var controller = new AuthController(CrearAuthService(), _db, email, _config, new GoogleNonceStore());
+
+        var resultado = await controller.SolicitarReset(new SolicitarResetRequest("ana@gmail.com"));
+
+        Assert.IsType<OkObjectResult>(resultado);
+        var enviado = Assert.Single(email.Enviados);
+        Assert.Equal("ana@gmail.com", enviado.Destino);
+        Assert.Equal("reset-contrasena", enviado.Asunto);
+
+        var recargado = await _db.Usuarios.AsNoTracking().FirstAsync(u => u.IdUsuario == usuario.IdUsuario);
+        Assert.False(string.IsNullOrEmpty(recargado.ResetToken));
+        Assert.NotNull(recargado.ResetTokenExpiry);
+        Assert.True(recargado.ResetTokenExpiry > DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task SolicitarReset_CorreoInexistente_NoEnviaCorreo()
+    {
+        var email = new EmailRegistrador();
+        var controller = new AuthController(CrearAuthService(), _db, email, _config, new GoogleNonceStore());
+
+        var resultado = await controller.SolicitarReset(new SolicitarResetRequest("nadie@gmail.com"));
+
+        // Respuesta genérica (no revela si la cuenta existe) y sin envío.
+        Assert.IsType<OkObjectResult>(resultado);
+        Assert.Empty(email.Enviados);
+    }
+
+    [Fact]
+    public async Task ResetPassword_TokenValido_CambiaContrasenaYPermiteIniciarSesion()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var rawToken = "token-valido-de-prueba";
+        usuario.ResetToken = HashResetToken(rawToken);
+        usuario.ResetTokenExpiry = DateTime.UtcNow.AddMinutes(30);
+        await _db.SaveChangesAsync();
+
+        var controller = new AuthController(CrearAuthService(), _db, new EmailRegistrador(), _config, new GoogleNonceStore());
+
+        var resultado = await controller.ResetPassword(new ResetContrasenaRequest
+        {
+            Token = rawToken,
+            NuevaContrasena = "NuevaClave456",
+            ConfirmarNueva = "NuevaClave456",
+        });
+
+        Assert.IsType<OkObjectResult>(resultado);
+
+        // La contraseña nueva debe servir para iniciar sesión.
+        var login = await CrearAuthService().LoginAsync(new LoginRequest("ana@gmail.com", "NuevaClave456"));
+        Assert.NotNull(login);
+
+        var recargado = await _db.Usuarios.AsNoTracking().FirstAsync(u => u.IdUsuario == usuario.IdUsuario);
+        Assert.Null(recargado.ResetToken);
+        Assert.Null(recargado.ResetTokenExpiry);
+    }
+
+    [Fact]
+    public async Task ResetPassword_TokenInvalido_DevuelveBadRequest()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        usuario.ResetToken = HashResetToken("token-correcto");
+        usuario.ResetTokenExpiry = DateTime.UtcNow.AddMinutes(30);
+        await _db.SaveChangesAsync();
+
+        var controller = new AuthController(CrearAuthService(), _db, new EmailRegistrador(), _config, new GoogleNonceStore());
+
+        var resultado = await controller.ResetPassword(new ResetContrasenaRequest
+        {
+            Token = "token-equivocado",
+            NuevaContrasena = "NuevaClave456",
+            ConfirmarNueva = "NuevaClave456",
+        });
+
+        Assert.IsType<BadRequestObjectResult>(resultado);
+    }
+
+    [Fact]
+    public async Task ResetPassword_TokenExpirado_DevuelveBadRequest()
+    {
+        var usuario = await CrearUsuarioSinHogarAsync();
+        var rawToken = "token-expirado";
+        usuario.ResetToken = HashResetToken(rawToken);
+        usuario.ResetTokenExpiry = DateTime.UtcNow.AddMinutes(-5);
+        await _db.SaveChangesAsync();
+
+        var controller = new AuthController(CrearAuthService(), _db, new EmailRegistrador(), _config, new GoogleNonceStore());
+
+        var resultado = await controller.ResetPassword(new ResetContrasenaRequest
+        {
+            Token = rawToken,
+            NuevaContrasena = "NuevaClave456",
+            ConfirmarNueva = "NuevaClave456",
+        });
+
+        Assert.IsType<BadRequestObjectResult>(resultado);
     }
 }
