@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
@@ -160,6 +161,20 @@ builder.Services.AddResponseCompression(options =>
 
 builder.Services.AddHealthChecks();
 var app = builder.Build();
+
+// Detras de nginx/Caddy (red Docker) y opcionalmente Cloudflare: recuperar la IP
+// real del cliente desde X-Forwarded-For y el esquema desde X-Forwarded-Proto.
+// Es seguro confiar en los proxies porque el backend NO se publica al host ni a
+// internet: solo es accesible desde la red interna de Docker. Sin esto, todos
+// los usuarios compartirian la IP del proxy y el limite de auth (10/min) seria
+// global en lugar de por cliente.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
 
 app.UseResponseCompression();
 app.UseSerilogRequestLogging();

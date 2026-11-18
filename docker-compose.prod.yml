@@ -1,0 +1,100 @@
+# Producción — RemesaSmart SV
+#
+# Pensado para un VPS (probado en idea para Oracle Cloud Ampere ARM, Ubuntu).
+# Levanta Postgres + backend + frontend + Caddy (HTTPS automático con Let's Encrypt).
+#
+# Uso (desde la carpeta backend/):
+#   cp .env.prod.example .env     # completa los valores reales
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Importante: solo Caddy publica puertos (80/443). La base de datos y el backend
+# NO se publican al host; quedan aislados en la red interna de Docker.
+#
+# Requiere que ../frontend exista como repo hermano (se construye la imagen ahí).
+
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: RemesaSmartDB
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - remesa_network
+
+  backend_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      # Caddy/Cloudflare terminan TLS; el backend recibe HTTP dentro de Docker.
+      - UseHttpsRedirection=false
+      # Usa una contrasena solo alfanumerica (sin ; $ " ' ni espacios) para no
+      # romper la cadena de conexion.
+      - ConnectionStrings__DefaultConnection=Host=postgres_db;Port=5432;Database=RemesaSmartDB;Username=postgres;Password=${POSTGRES_PASSWORD}
+      - Jwt__Key=${JWT_KEY:?Falta JWT_KEY en .env}
+      - Jwt__Issuer=RemesaSmartSV
+      - Jwt__Audience=RemesaSmartSVClient
+      # El frontend hace proxy de /api (mismo origen), pero CORS es fail-closed
+      # en Produccion: debe estar definido.
+      - CORS_ORIGINS_PROD=${APP_URL}
+      - APP_URL=${APP_URL}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - TIPS_ADMIN_EMAILS=${TIPS_ADMIN_EMAILS:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+    networks:
+      - remesa_network
+
+  frontend_web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    restart: always
+    depends_on:
+      - backend_api
+    networks:
+      - remesa_network
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - frontend_web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:?Falta DOMAIN en .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - remesa_network
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  remesa_network:
+    driver: bridge

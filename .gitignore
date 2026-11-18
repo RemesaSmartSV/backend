@@ -27,6 +27,7 @@ appsettings.Development.json
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 ## User secrets (nunca deben subirse)
 secrets.json
@@ -40,6 +41,7 @@ backups/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Indice local de CodeGraph (tooling, no se versiona)
 .codegraph/

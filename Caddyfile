@@ -1,0 +1,15 @@
+# Caddy: HTTPS automático (Let's Encrypt) y reverse proxy hacia el frontend.
+# El frontend (nginx) sirve la SPA y hace proxy de /api/ al backend.
+#
+# DOMAIN viene del .env (p. ej. app.tudominio.com). Debe apuntar (A record)
+# a la IP pública del servidor y los puertos 80/443 deben estar abiertos.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Oculta la versión del servidor.
+	header -Server
+
+	# El frontend ya envía los headers de seguridad (CSP, X-Frame-Options, etc.).
+	reverse_proxy frontend_web:80
+}
