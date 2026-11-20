@@ -68,22 +68,39 @@ public class CategoriasController : ControllerBase
     private async Task<List<Categoria>> ObtenerCategoriasAsync(int idHogar)
     {
         if (_cache is null)
-        {
-            return await _db.Categorias.AsNoTracking()
-                .Where(c => c.IdHogar == idHogar)
-                .OrderBy(c => c.Nombre)
-                .ToListAsync();
-        }
+            return await CargarConResiembraAsync(idHogar);
 
         var clave = ClaveCache(idHogar);
         if (_cache.TryGetValue<List<Categoria>>(clave, out var cacheado) && cacheado is not null)
             return cacheado;
 
+        var lista = await CargarConResiembraAsync(idHogar);
+        _cache.Set(clave, lista, TimeSpan.FromSeconds(VentanaCacheSegundos));
+        return lista;
+    }
+
+    /// <summary>
+    /// Carga las categorías del hogar y, si no tiene ninguna, vuelve a sembrar las del
+    /// sistema (idempotente). Repara hogares creados antes de que la siembra existiera o
+    /// quedados sin categorías por un despliegue a medias. No toca el hogar 0: es el
+    /// marcador de "sin familia" del claim y no debe acumular datos huérfanos.
+    /// </summary>
+    private async Task<List<Categoria>> CargarConResiembraAsync(int idHogar)
+    {
         var lista = await _db.Categorias.AsNoTracking()
             .Where(c => c.IdHogar == idHogar)
             .OrderBy(c => c.Nombre)
             .ToListAsync();
-        _cache.Set(clave, lista, TimeSpan.FromSeconds(VentanaCacheSegundos));
+
+        if (lista.Count == 0 && idHogar > 0)
+        {
+            await CategoriasSistema.SeedAsync(_db, idHogar);
+            lista = await _db.Categorias.AsNoTracking()
+                .Where(c => c.IdHogar == idHogar)
+                .OrderBy(c => c.Nombre)
+                .ToListAsync();
+        }
+
         return lista;
     }
 

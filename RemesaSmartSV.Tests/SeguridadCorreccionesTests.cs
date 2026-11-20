@@ -422,19 +422,19 @@ public class SeguridadCorreccionesTests : IDisposable
         var controller = new CategoriasController(_db, cache);
         AsignarClaims(controller, 1, 1, "Miembro");
 
-        // Primera lectura: cachea la lista (aún vacía).
-        var r1 = await controller.GetCategorias();
+        // Primera lectura: cachea la lista (tras la re-siembra del hogar vacío).
+        var r1 = await controller.GetCategorias(pageSize: 100);
         var p1 = Assert.IsType<OkObjectResult>(r1.Result);
         var lista1 = Assert.IsType<PaginatedResponse<Categoria>>(p1.Value);
-        Assert.Empty(lista1.Items);
+        Assert.Equal(23, lista1.Total);
 
         // Crear una categoría debe invalidar el caché y reflejarse al momento.
         await controller.Create(new Categoria { Nombre = "Nueva", Tipo = "Gasto" });
 
-        var r2 = await controller.GetCategorias();
+        var r2 = await controller.GetCategorias(pageSize: 100);
         var p2 = Assert.IsType<OkObjectResult>(r2.Result);
         var lista2 = Assert.IsType<PaginatedResponse<Categoria>>(p2.Value);
-        Assert.Single(lista2.Items);
-        Assert.Equal("Nueva", lista2.Items.First().Nombre);
+        Assert.Equal(24, lista2.Total);
+        Assert.Contains(lista2.Items, c => c.Nombre == "Nueva");
     }
 }

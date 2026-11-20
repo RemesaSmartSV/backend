@@ -1,5 +1,10 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using RemesaSmartSV.Controllers;
 using RemesaSmartSV.Data;
+using RemesaSmartSV.DTOs;
 using RemesaSmartSV.Entities;
 using RemesaSmartSV.Services;
 
@@ -118,4 +123,62 @@ public class CategoriasSistemaTests : IDisposable
     [InlineData("Vivienda", "vivienda")]
     public void Normalizar_PiegaAcentosMayusculasYEspacios(string entrada, string esperada)
         => Assert.Equal(esperada, CategoriasSistema.Normalizar(entrada));
+
+    private CategoriasController ControllerDeHogar(int idHogar)
+    {
+        var claims = new List<Claim>
+        {
+            new("idUsuario", "1"),
+            new("idHogar", idHogar.ToString())
+        };
+        var controller = new CategoriasController(_db);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"))
+            }
+        };
+        return controller;
+    }
+
+    private static PaginatedResponse<Categoria> Pagina(ActionResult<PaginatedResponse<Categoria>> resultado)
+    {
+        var ok = Assert.IsType<OkObjectResult>(resultado.Result);
+        return Assert.IsType<PaginatedResponse<Categoria>>(ok.Value);
+    }
+
+    [Fact]
+    public async Task GetCategorias_HogarSinCategorias_SembrarLasDelSistema()
+    {
+        var controller = ControllerDeHogar(Hogar);
+
+        var resultado = await controller.GetCategorias();
+
+        Assert.Equal(23, Pagina(resultado).Total);
+        Assert.Equal(23, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
+    }
+
+    [Fact]
+    public async Task GetCategorias_SinHogar_NoSiembraElHogarCero()
+    {
+        var controller = ControllerDeHogar(0);
+
+        var resultado = await controller.GetCategorias();
+
+        Assert.Equal(0, Pagina(resultado).Total);
+        Assert.Equal(0, await _db.Categorias.CountAsync(c => c.IdHogar == 0));
+    }
+
+    [Fact]
+    public async Task GetCategorias_HogarConCategorias_NoDuplicaLasDelSistema()
+    {
+        await CategoriasSistema.SeedAsync(_db, Hogar);
+        var controller = ControllerDeHogar(Hogar);
+
+        var resultado = await controller.GetCategorias();
+
+        Assert.Equal(23, Pagina(resultado).Total);
+        Assert.Equal(23, await _db.Categorias.CountAsync(c => c.IdHogar == Hogar));
+    }
 }
