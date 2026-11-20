@@ -8,9 +8,13 @@ using System.Text;
 namespace RemesaSmartSV.Services;
 
 /// <summary>
-/// Envío de correos vía SMTP con Gmail.
+/// Env��o de correos v��a SMTP.
 /// Credenciales en variables de entorno: SMTP_USER, SMTP_PASS.
-/// NOTA: Gmail requiere "App Password" (no la contraseña normal) si 2FA está activado.
+/// Opcionales: SMTP_HOST (defecto smtp.gmail.com), SMTP_PORT (defecto 587) y
+/// SMTP_FROM (remitente visible; defecto SMTP_USER). Gmail requiere "App Password"
+/// (no la contrase��a normal) si 2FA estǭ activado. En instancias gratuitas de
+/// Render los puertos 25/465/587 estǭ bloqueados: usar SMTP_PORT=2525 con un
+/// proveedor que lo soporte.
 /// </summary>
 public class SmtpEmailService : IEmailService
 {
@@ -29,15 +33,21 @@ public class SmtpEmailService : IEmailService
             return false;
         }
 
+        var smtpHost = Environment.GetEnvironmentVariable("SMTP_HOST") ?? "smtp.gmail.com";
+        var smtpPort = int.TryParse(Environment.GetEnvironmentVariable("SMTP_PORT"), out var puerto) ? puerto : 587;
+        var remitente = Environment.GetEnvironmentVariable("SMTP_FROM");
+
         try
         {
-            using var cliente = new SmtpClient("smtp.gmail.com", 587)
+            using var cliente = new SmtpClient(smtpHost, smtpPort)
             {
                 Credentials = new NetworkCredential(smtpUser, smtpPass),
                 EnableSsl = true,
             };
 
-            using var mensaje = ConstruirMensaje(smtpUser, destino, asunto, cuerpoHtml, cuerpoTexto);
+            using var mensaje = ConstruirMensaje(
+                string.IsNullOrWhiteSpace(remitente) ? smtpUser : remitente,
+                destino, asunto, cuerpoHtml, cuerpoTexto);
 
             await cliente.SendMailAsync(mensaje);
             _logger.LogInformation("Correo enviado correctamente.");
