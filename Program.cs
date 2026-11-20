@@ -102,7 +102,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-// Mitigacion de fuerza bruta sobre login y registro: 10 intentos por minuto y origen.
+// Mitigacion de fuerza bruta sobre login y registro: 30 intentos por minuto y origen.
+// Cada carga de la pantalla de login consume un slot (nonce de Google incluido), asi
+// que 10 resultaban insuficientes incluso para un uso normal con reintentos.
 // No se aplica un limite global a toda la API para no entorpecer el panel, que dispara
 // varias peticiones por pantalla.
 builder.Services.AddRateLimiter(options =>
@@ -113,7 +115,7 @@ builder.Services.AddRateLimiter(options =>
         var origen = context.Connection.RemoteIpAddress?.ToString() ?? "origen-desconocido";
         return RateLimitPartition.GetFixedWindowLimiter(origen, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 10,
+            PermitLimit = 30,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
