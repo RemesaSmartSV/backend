@@ -33,7 +33,8 @@ public class UsuariosController : ControllerBase
     {
         var actual = await UsuarioActualAsync();
         if (actual?.IdHogar is null)
-            return Forbid();
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "Antes de continuar debes crear o unirte a una familia." });
 
         var miembros = await _db.Usuarios
             .AsNoTracking()
