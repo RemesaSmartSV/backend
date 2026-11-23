@@ -1,0 +1,54 @@
+﻿{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "remesasmart-api",
+	"main": "worker/index.js",
+	"compatibility_date": "2026-11-21",
+	"containers": [
+		{
+			"class_name": "BackendV2",
+			"scheduling_policy": "durable_object",
+			"images": {
+				"base": {
+					"dockerfile": "./Dockerfile"
+				}
+			}
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "API",
+				"class_name": "BackendV2"
+			}
+		]
+	},
+	"exports": {
+		"Backend": {
+			"type": "durable-object",
+			"state": "deleted"
+		},
+		"BackendV2": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
+	},
+	"vars": {
+		"CONTAINER_IMAGE_VERSION": "2026-11-23-4",
+		"ASPNETCORE_ENVIRONMENT": "Production",
+		"JWT_ISSUER": "RemesaSmartSV",
+		"JWT_AUDIENCE": "RemesaSmartSVClient",
+		"CORS_ORIGINS_PROD": "https://remesasmart-sv.pages.dev",
+		"USE_HTTPS_REDIRECTION": "false",
+		"APP_URL": "https://remesasmart-sv.pages.dev",
+		"GOOGLE_CLIENT_ID": "690015557505-tlktfkhr82co8cga2mn1vmcaoq251l22.apps.googleusercontent.com",
+		"GROQ_MODEL": "openai/gpt-oss-120b",
+		"SMTP_HOST": "smtp.gmail.com",
+		"SMTP_PORT": "587",
+		"TIPS_ADMIN_EMAILS": ""
+	}
+}
+
+
+
+
+
