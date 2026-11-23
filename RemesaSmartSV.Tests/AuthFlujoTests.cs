@@ -120,6 +120,9 @@ public class AuthFlujoTests : IDisposable
         var usuario = await _db.Usuarios.SingleAsync();
         Assert.Null(usuario.IdHogar);
         Assert.Null(usuario.Rol);
+        // El nombre completo se reparte: primera palabra en Nombre, resto en Apellido.
+        Assert.Equal("Ana", usuario.Nombre);
+        Assert.Equal("Rivera", usuario.Apellido);
         // El registro ya no debe crear hogares ni sembras categorias.
         Assert.False(await _db.Hogares.AnyAsync());
         Assert.False(await _db.Categorias.AnyAsync());
@@ -127,6 +130,20 @@ public class AuthFlujoTests : IDisposable
         Assert.Null(response!.IdHogar);
         Assert.Null(response.Rol);
         Assert.False(string.IsNullOrEmpty(response.Token));
+    }
+
+    [Theory]
+    [InlineData("Ana Rivera", "Ana", "Rivera")]
+    [InlineData("Juan Carlos Perez Lopez", "Juan", "Carlos Perez Lopez")]
+    [InlineData("  Maria   Jose  ", "Maria", "Jose")]
+    [InlineData("Platano", "Platano", null)]
+    public void PartirNombreCompleto_RepartePrimeraPalabraYResto(
+        string nombreCompleto, string esperado, string? apellidoEsperado)
+    {
+        var (nombre, apellido) = AuthService.PartirNombreCompleto(nombreCompleto);
+
+        Assert.Equal(esperado, nombre);
+        Assert.Equal(apellidoEsperado, apellido);
     }
 
     [Fact]

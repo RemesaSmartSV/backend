@@ -190,9 +190,12 @@ public class AuthController : ControllerBase
 
         if (usuario is null)
         {
+            var (nombre, apellido) = AuthService.PartirNombreCompleto(
+                payload.Name ?? payload.Email.Split('@')[0]);
             usuario = new Entities.Usuario
             {
-                Nombre = payload.Name ?? payload.Email.Split('@')[0],
+                Nombre = nombre,
+                Apellido = apellido,
                 Correo = payload.Email.ToLower(),
                 FechaRegistro = DateTime.UtcNow,
                 GoogleSubject = payload.Subject,

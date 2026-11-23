@@ -26,6 +26,22 @@ public class AuthService
         => !string.IsNullOrWhiteSpace(correo)
            && correo.Trim().EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Reparte un nombre completo escrito en un solo campo: la primera palabra
+    /// va a Nombre y el resto a Apellido. Con una sola palabra el apellido queda
+    /// vacío. Así el registro no deja todo el nombre en el campo Nombre.
+    /// </summary>
+    public static (string Nombre, string? Apellido) PartirNombreCompleto(string? nombreCompleto)
+    {
+        var limpio = (nombreCompleto ?? string.Empty).Trim();
+        var indice = limpio.IndexOf(' ');
+        if (indice < 0)
+            return (limpio, null);
+
+        var apellido = limpio[(indice + 1)..].Trim();
+        return (limpio[..indice], apellido.Length == 0 ? null : apellido);
+    }
+
     public async Task<LoginResponse?> RegisterAsync(RegisterRequest request)
     {
         if (!EsCorreoGmail(request.Correo))
@@ -36,9 +52,11 @@ public class AuthService
 
         // El registro ya no crea el hogar: el usuario queda sin IdHogar y sin Rol
         // hasta que crea un hogar (POST api/hogares) o se une a uno existente.
+        var (nombre, apellido) = PartirNombreCompleto(request.Nombre);
         var usuario = new Usuario
         {
-            Nombre = request.Nombre,
+            Nombre = nombre,
+            Apellido = apellido,
             Correo = request.Correo,
             FechaRegistro = DateTime.UtcNow
         };
