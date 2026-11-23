@@ -378,9 +378,10 @@ public class UsuariosController : ControllerBase
     /// <summary>Abandona la familia actual del usuario autenticado.</summary>
     /// <remarks>
     /// Cualquier miembro puede salirse libremente, incluido el último Admin.
-    /// Si la familia queda sin miembros, el hogar y sus datos financieros se
-    /// conservan (requisito §6.3 Caso A): el hogar queda vacío de personas pero
-    /// mantiene movimientos, metas, aportes, presupuestos y categorías.
+    /// Si la familia queda sin miembros, se elimina el hogar junto con todos sus
+    /// datos (movimientos, metas, aportes, presupuestos, categorías, remesas,
+    /// invitaciones y solicitudes). Los usuarios no se eliminan: solo se
+    /// desvinculan del hogar.
     /// </remarks>
     /// <response code="200">LoginResponse refrescado sin hogar.</response>
     /// <response code="400">No perteneces a ninguna familia.</response>
@@ -409,17 +410,53 @@ public class UsuariosController : ControllerBase
         usuario.Rol = null;
         await _db.SaveChangesAsync();
 
+        // Si la familia se quedó sin miembros, se borra el hogar y todos sus
+        // datos: sin personas ya no representan a nadie. Las FK hacia Hogar son
+        // RESTRICT, así que los datos dependientes se eliminan antes que él.
+        var hogarEliminado = await EliminarHogarSiQuedoVacioAsync(idHogar);
+
         // Aviso a los miembros restantes: los destinatarios se materializan
         // dentro del scope de la request; solo el envío corre fuera de ella
-        // (fire-and-forget), ya con la baja persistida.
-        var miembrosRestantes = await PrepararAvisoSalidaFamiliaAsync(idHogar);
-        _ = NotificarSalidaFamiliaAsync(miembrosRestantes, nombreFamilia, nombrePersona);
+        // (fire-and-forget), ya con la baja persistida. Con el hogar eliminado
+        // no queda nadie a quien avisar.
+        if (!hogarEliminado)
+        {
+            var miembrosRestantes = await PrepararAvisoSalidaFamiliaAsync(idHogar);
+            _ = NotificarSalidaFamiliaAsync(miembrosRestantes, nombreFamilia, nombrePersona);
+        }
 
-        // Si la familia se quedó sin miembros, el hogar NO se elimina: conserva
-        // todos sus datos financieros por requisito (§6.3 Caso A). Las FK hacia
-        // Hogar son RESTRICT a nivel de base de datos, así que ninguna cascada
-        // destructiva puede borrarlos.
         return Ok(_authService.BuildLoginResponse(usuario));
+    }
+
+    /// <summary>
+    /// Elimina el hogar y todos sus datos cuando ya no queda ningún miembro.
+    /// Devuelve true si el hogar fue eliminado. Los usuarios no se borran: se
+    /// desvinculan antes (IdHogar es nullable). Las FK hacia Hogar son
+    /// RESTRICT, así que los datos dependientes se eliminan antes que el hogar.
+    /// </summary>
+    private async Task<bool> EliminarHogarSiQuedoVacioAsync(int idHogar)
+    {
+        var quedanMiembros = await _db.Usuarios.AnyAsync(u => u.IdHogar == idHogar);
+        if (quedanMiembros)
+            return false;
+
+        _db.Aportes.RemoveRange(_db.Aportes.Where(a => a.IdHogar == idHogar));
+        _db.Presupuestos.RemoveRange(_db.Presupuestos.Where(p => p.IdHogar == idHogar));
+        _db.Movimientos.RemoveRange(_db.Movimientos.Where(m => m.IdHogar == idHogar));
+        _db.MetasAhorro.RemoveRange(_db.MetasAhorro.Where(m => m.IdHogar == idHogar));
+        _db.Remesas.RemoveRange(_db.Remesas.Where(r => r.IdHogar == idHogar));
+        _db.Categorias.RemoveRange(_db.Categorias.Where(c => c.IdHogar == idHogar));
+        _db.InvitacionesFamilia.RemoveRange(
+            _db.InvitacionesFamilia.Where(i => i.IdHogar == idHogar));
+        _db.SolicitudesUnion.RemoveRange(
+            _db.SolicitudesUnion.Where(s => s.IdHogar == idHogar));
+
+        var hogar = await _db.Hogares.FindAsync(idHogar);
+        if (hogar is not null)
+            _db.Hogares.Remove(hogar);
+
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>

@@ -12,8 +12,8 @@ namespace RemesaSmartSV.Tests;
 
 /// <summary>
 /// Pruebas de <see cref="UsuariosController.AbandonarFamilia"/> y del borrado
-/// de hogares. Cubre el requisito §6.3 Caso A: cuando se va el último miembro
-/// (o se intenta borrar la familia), el hogar y sus datos financieros se conservan.
+/// de hogares. Cuando se va el último miembro, el hogar se elimina junto con
+/// todos sus datos; los usuarios solo se desvinculan.
 /// </summary>
 public class FamiliaAbandonoTests : IDisposable
 {
@@ -143,7 +143,7 @@ public class FamiliaAbandonoTests : IDisposable
     }
 
     [Fact]
-    public async Task AbandonarFamilia_UltimoMiembro_ConservaHogarYDatosFinancieros()
+    public async Task AbandonarFamilia_UltimoMiembro_EliminaHogarYDatosFinancieros()
     {
         var (hogar, unico) = SembrarHogarConDatos();
         var controller = CrearController(unico.IdUsuario);
@@ -152,15 +152,14 @@ public class FamiliaAbandonoTests : IDisposable
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
 
-        // El hogar sigue existiendo, vacio de personas pero intacto.
-        Assert.NotNull(await _db.Hogares.FindAsync(hogar.IdHogar));
-
-        // Todos los datos financieros se conservan (§6.3 Caso A).
-        Assert.Single(await _db.Categorias.Where(c => c.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Single(await _db.MetasAhorro.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Single(await _db.Aportes.Where(a => a.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Single(await _db.Movimientos.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
-        Assert.Single(await _db.Presupuestos.Where(p => p.IdHogar == hogar.IdHogar).ToListAsync());
+        // El hogar se elimina junto con todos sus datos: sin miembros ya no
+        // representa a nadie.
+        Assert.Null(await _db.Hogares.FindAsync(hogar.IdHogar));
+        Assert.Empty(await _db.Categorias.Where(c => c.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Empty(await _db.MetasAhorro.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Empty(await _db.Aportes.Where(a => a.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Empty(await _db.Movimientos.Where(m => m.IdHogar == hogar.IdHogar).ToListAsync());
+        Assert.Empty(await _db.Presupuestos.Where(p => p.IdHogar == hogar.IdHogar).ToListAsync());
 
         // El usuario SOBREVIVE (su IdHogar es nullable) pero queda desvinculado.
         var usuario = await _db.Usuarios.FindAsync(unico.IdUsuario);
@@ -223,7 +222,8 @@ public class FamiliaAbandonoTests : IDisposable
         var result = await controller.AbandonarFamilia();
 
         Assert.IsType<OkObjectResult>(result.Result);
-        Assert.NotNull(await _db.Hogares.FindAsync(hogar.IdHogar));
+        // Último miembro: el hogar se elimina con todos sus datos.
+        Assert.Null(await _db.Hogares.FindAsync(hogar.IdHogar));
     }
 
     [Fact]
