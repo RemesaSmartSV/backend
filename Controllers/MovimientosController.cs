@@ -232,10 +232,14 @@ public class MovimientosController : ControllerBase
 
         // Aviso a la familia: cada miembro del hogar recibe el detalle del
         // movimiento recién registrado (incluye a quien lo registra). Los
-        // destinatarios se materializan aquí, dentro del scope de la request.
+        // destinatarios se materializan aquí, dentro del scope de la request y
+        // el envío se espera antes de responder para que no se pueda perder.
         var avisoMovimiento = await PrepararAvisoMovimientoAsync(movimiento);
-        if (avisoMovimiento is not null)
-            _ = NotificarMovimientoAFamiliaAsync(avisoMovimiento);
+        var enviados = avisoMovimiento is null
+            ? 0
+            : await NotificarMovimientoAFamiliaAsync(avisoMovimiento);
+        Response.Headers["X-Aviso-Movimiento"] =
+            $"destinatarios={avisoMovimiento?.Destinatarios.Count ?? 0};enviados={enviados}";
 
         return CreatedAtAction(nameof(GetMovimiento), new { id = movimiento.IdMovimiento }, movimiento);
     }
@@ -303,23 +307,28 @@ public class MovimientosController : ControllerBase
 
     /// <summary>
     /// Envía el aviso de movimiento a los destinatarios ya materializados. No
-    /// toca el DbContext: corre fuera del scope de la request.
+    /// toca el DbContext. Devuelve la cantidad de correos aceptados por el
+    /// servidor SMTP.
     /// </summary>
-    private async Task NotificarMovimientoAFamiliaAsync(AvisoMovimiento aviso)
+    private async Task<int> NotificarMovimientoAFamiliaAsync(AvisoMovimiento aviso)
     {
+        var enviados = 0;
         try
         {
             foreach (var (correo, nombre) in aviso.Destinatarios)
             {
-                await _email.EnviarMovimientoFamiliaAsync(
+                if (await _email.EnviarMovimientoFamiliaAsync(
                     correo, nombre, aviso.NombreAutor,
-                    aviso.TipoMovimiento, aviso.Monto, aviso.Descripcion, aviso.Fecha);
+                    aviso.TipoMovimiento, aviso.Monto, aviso.Descripcion, aviso.Fecha))
+                    enviados++;
             }
         }
         catch
         {
             // El aviso a la familia no debe bloquear la operación financiera.
         }
+
+        return enviados;
     }
 
     /// <summary>

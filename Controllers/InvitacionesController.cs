@@ -208,10 +208,10 @@ public class InvitacionesController : ControllerBase
 
         // Aviso de la nueva incorporación a todos los miembros del hogar,
         // incluida la persona que se acaba de unir. Los destinatarios se
-        // materializan dentro del scope de la request; solo el envío corre
-        // fuera de ella (fire-and-forget).
+        // materializan dentro del scope de la request y el envío se espera
+        // antes de responder para que no se pueda perder.
         var miembrosHogar = await PrepararAvisoUnionFamiliaAsync(invitacion.IdHogar);
-        _ = NotificarUnionFamiliaAsync(miembrosHogar, nombreFamilia, usuario.Nombre);
+        await NotificarUnionFamiliaAsync(miembrosHogar, nombreFamilia, usuario.Nombre);
 
         return Ok(_authService.BuildLoginResponse(usuario));
     }
